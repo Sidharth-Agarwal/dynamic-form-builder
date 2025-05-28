@@ -66,7 +66,6 @@ const DateField = ({ field, onUpdate }) => {
       
       <div className="form-builder-control">
         <label className="form-builder-label">Default Date</label>
-        // src/modules/form-builder/components/builder/fields/DateField.jsx (continued)
         <input
           type="date"
           className="form-builder-input"

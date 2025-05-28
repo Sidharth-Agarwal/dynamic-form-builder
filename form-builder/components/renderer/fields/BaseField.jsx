@@ -1,40 +1,28 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 
 /**
- * Component to display after successful form submission
+ * Base field component that wraps form fields with common elements
  * 
  * @param {Object} props - Component props
- * @param {string} props.message - Success message to display
- * @param {string} [props.redirectUrl] - URL to redirect to
- * @param {Object} [props.submitData] - Data from form submission
+ * @param {Object} props.field - Field configuration
+ * @param {React.ReactNode} props.children - Field input element
+ * @param {string} [props.className] - Additional CSS classes
  */
-const SuccessMessage = ({ message, redirectUrl, submitData }) => {
-  // Handle redirect if URL is provided
-  useEffect(() => {
-    if (redirectUrl) {
-      const timer = setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 3000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [redirectUrl]);
-  
+const BaseField = ({ field, children, className = '' }) => {
   return (
-    <div className="form-renderer-success">
-      <div className="form-renderer-success-icon">✓</div>
-      <h2 className="form-renderer-success-title">Form Submitted</h2>
-      <div className="form-renderer-success-message">
-        {message}
-      </div>
+    <div className={`form-renderer-field form-renderer-field-${field.type} ${className}`}>
+      <label className="form-renderer-label" htmlFor={field.id}>
+        {field.label}
+        {field.required && <span className="form-renderer-required">*</span>}
+      </label>
       
-      {redirectUrl && (
-        <div className="form-renderer-redirect-message">
-          You will be redirected shortly...
-        </div>
+      {children}
+      
+      {field.helpText && (
+        <div className="form-renderer-help-text">{field.helpText}</div>
       )}
     </div>
   );
 };
 
-export default SuccessMessage;
+export default BaseField;

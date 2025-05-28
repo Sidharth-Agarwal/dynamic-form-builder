@@ -1,4 +1,4 @@
-import { updateDocument } from '../firebase/firestore';
+import { updateDocument, readDocument } from '../firebase/firestore';
 
 // Collection name for forms
 const FORMS_COLLECTION = 'forms';
@@ -124,6 +124,3 @@ export const reorderFields = async (formId, fieldIds) => {
     throw error;
   }
 };
-
-// Import missing function from the top
-import { readDocument } from '../firebase/firestore';
