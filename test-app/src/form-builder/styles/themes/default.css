@@ -1,0 +1,45 @@
+.form-builder-theme-default {
+    --form-builder-primary-color: #1976d2;
+    --form-builder-secondary-color: #424242;
+    --form-builder-success-color: #4caf50;
+    --form-builder-error-color: #f44336;
+    --form-builder-warning-color: #ff9800;
+    --form-builder-info-color: #2196f3;
+    --form-builder-light-color: #f5f5f5;
+    --form-builder-dark-color: #212121;
+    --form-builder-text-color: #333333;
+    --form-builder-text-light-color: #ffffff;
+    --form-builder-border-color: #e0e0e0;
+    --form-builder-background-color: #ffffff;
+}
+
+.form-builder-theme-default .form-builder-header {
+    background-color: var(--form-builder-primary-color);
+    color: var(--form-builder-text-light-color);
+}
+
+.form-builder-theme-default .form-builder-card {
+    background-color: var(--form-builder-background-color);
+    border: 1px solid var(--form-builder-border-color);
+    border-radius: var(--form-builder-border-radius);
+    box-shadow: var(--form-builder-box-shadow);
+}
+
+.form-builder-theme-default .form-builder-sidebar {
+    background-color: var(--form-builder-light-color);
+    border-right: 1px solid var(--form-builder-border-color);
+}
+
+.form-builder-theme-default .form-builder-field {
+    border: 1px solid var(--form-builder-border-color);
+    background-color: var(--form-builder-background-color);
+}
+
+.form-builder-theme-default .form-builder-field:hover {
+    border-color: var(--form-builder-primary-color);
+}
+
+.form-builder-theme-default .form-builder-field.selected {
+    border-color: var(--form-builder-primary-color);
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}

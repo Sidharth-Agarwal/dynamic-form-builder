@@ -1,0 +1,219 @@
+.form-submissions-container {
+    padding: 24px;
+}
+
+.form-submissions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.form-submissions-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.form-submissions-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.form-submissions-filters {
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: var(--form-builder-light-color);
+    border-radius: var(--form-builder-border-radius);
+}
+
+.form-submissions-filters-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.form-submissions-filters-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.form-submissions-filters-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.form-submissions-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+}
+
+.form-submissions-table th,
+.form-submissions-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--form-builder-border-color);
+}
+
+.form-submissions-table th {
+    background-color: var(--form-builder-light-color);
+    font-weight: 600;
+}
+
+.form-submissions-table tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.form-submissions-table .actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.form-submissions-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.form-submissions-pagination-info {
+    font-size: 14px;
+    color: var(--form-builder-secondary-color);
+}
+
+.form-submissions-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-submissions-pagination-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--form-builder-border-color);
+    border-radius: var(--form-builder-border-radius);
+    background-color: var(--form-builder-background-color);
+    cursor: pointer;
+    transition: var(--form-builder-transition);
+}
+
+.form-submissions-pagination-button:hover {
+    background-color: var(--form-builder-light-color);
+}
+
+.form-submissions-pagination-button.active {
+    background-color: var(--form-builder-primary-color);
+    color: var(--form-builder-text-light-color);
+    border-color: var(--form-builder-primary-color);
+}
+
+.form-submissions-pagination-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.form-submissions-details {
+    background-color: var(--form-builder-background-color);
+    border-radius: var(--form-builder-border-radius);
+    box-shadow: var(--form-builder-box-shadow);
+    padding: 24px;
+}
+
+.form-submissions-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--form-builder-border-color);
+}
+
+.form-submissions-details-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.form-submissions-details-meta {
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: var(--form-builder-light-color);
+    border-radius: var(--form-builder-border-radius);
+}
+
+.form-submissions-details-meta-item {
+    display: flex;
+    margin-bottom: 8px;
+}
+
+.form-submissions-details-meta-label {
+    width: 120px;
+    font-weight: 600;
+}
+
+.form-submissions-details-content {
+    margin-bottom: 24px;
+}
+
+.form-submissions-details-field {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--form-builder-border-color);
+}
+
+.form-submissions-details-field:last-child {
+    border-bottom: none;
+}
+
+.form-submissions-details-field-label {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.form-submissions-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.form-submissions-stat-card {
+    background-color: var(--form-builder-background-color);
+    border-radius: var(--form-builder-border-radius);
+    box-shadow: var(--form-builder-box-shadow);
+    padding: 16px;
+}
+
+.form-submissions-stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.form-submissions-stat-label {
+    font-size: 14px;
+    color: var(--form-builder-secondary-color);
+}
+
+.form-submissions-chart {
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: var(--form-builder-background-color);
+    border-radius: var(--form-builder-border-radius);
+    box-shadow: var(--form-builder-box-shadow);
+}
+
+.form-submissions-export {
+    margin-top: 24px;
+}
+
+.form-submissions-export-buttons {
+    display: flex;
+    gap: 8px;
+}
