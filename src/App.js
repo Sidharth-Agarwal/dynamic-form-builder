@@ -200,25 +200,6 @@ const App = () => {
         {currentView === 'builder' && renderBuilder()}
         {currentView === 'renderer' && renderFormView()}
       </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <div className="text-center text-gray-500">
-            <p className="mb-2">
-              <strong>Phase 1 Enhanced!</strong> 🎉
-            </p>
-            <p className="text-sm">
-              Features: Form Dashboard • Google Forms-like Editor • Form Persistence • 
-              Dynamic Options • Live Preview • Form Management
-            </p>
-            <p className="text-sm mt-2">
-              Saved Forms: <strong>{savedForms.length}</strong> | 
-              Total Fields: <strong>{savedForms.reduce((acc, form) => acc + (form.fields?.length || 0), 0)}</strong>
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };
