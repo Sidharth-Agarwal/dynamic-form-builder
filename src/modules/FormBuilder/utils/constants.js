@@ -1,4 +1,4 @@
-// utils/constants.js - Enhanced Constants
+// utils/constants.js - Enhanced Constants with Role System
 
 // Generate unique ID for fields
 export const generateId = () => `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -16,6 +16,65 @@ export const FORM_BUILDER_CONSTANTS = {
   DEFAULT_MAX_RATING: 5
 };
 
+// Role System Constants
+export const ROLE_CONSTANTS = {
+  DEFAULT_ROLES: {
+    ADMIN: 'admin',
+    MANAGER: 'manager',
+    USER: 'user',
+    GUEST: 'guest',
+    SUPER_ADMIN: 'super_admin'
+  },
+  ROLE_LEVELS: {
+    super_admin: 100,
+    admin: 80,
+    manager: 60,
+    moderator: 40,
+    user: 20,
+    guest: 10
+  },
+  ROLE_ALIASES: {
+    'administrator': 'admin',
+    'superadmin': 'super_admin',
+    'super-admin': 'super_admin',
+    'super admin': 'super_admin',
+    'end-user': 'user',
+    'enduser': 'user',
+    'standard-user': 'user',
+    'standarduser': 'user',
+    'member': 'user',
+    'customer': 'user',
+    'client': 'user'
+  }
+};
+
+// Permission Constants
+export const PERMISSION_CONSTANTS = {
+  ACTIONS: {
+    CREATE: 'create',
+    READ: 'read',
+    UPDATE: 'update',
+    DELETE: 'delete',
+    EXPORT: 'export',
+    PUBLISH: 'publish',
+    MANAGE: 'manage'
+  },
+  RESOURCES: {
+    FORMS: 'forms',
+    SUBMISSIONS: 'submissions',
+    ANALYTICS: 'analytics',
+    SETTINGS: 'settings',
+    USERS: 'users'
+  },
+  LEVELS: {
+    NONE: 0,
+    READ: 1,
+    WRITE: 2,
+    ADMIN: 3,
+    SUPER: 4
+  }
+};
+
 // UI Messages
 export const MESSAGES = {
   FORM_SAVED: 'Form saved successfully!',
@@ -28,7 +87,15 @@ export const MESSAGES = {
   DRAG_DROP_SUCCESS: 'Field order updated',
   FILE_UPLOAD_ERROR: 'File upload failed',
   FILE_SIZE_ERROR: 'File size exceeds limit',
-  FILE_TYPE_ERROR: 'File type not allowed'
+  FILE_TYPE_ERROR: 'File type not allowed',
+  
+  // Role-related messages
+  ACCESS_DENIED: 'Access denied: Insufficient permissions',
+  ROLE_REQUIRED: 'Authentication required to access this feature',
+  INVALID_ROLE: 'Invalid user role detected',
+  PERMISSION_DENIED: 'You do not have permission to perform this action',
+  ROLE_CHANGED: 'User role updated successfully',
+  LOGIN_REQUIRED: 'Please log in to continue'
 };
 
 // Field Type Categories
@@ -156,14 +223,34 @@ export const VIEWS = {
   DASHBOARD: 'dashboard',
   BUILDER: 'builder', 
   RENDERER: 'renderer',
-  ANALYTICS: 'analytics'
+  ANALYTICS: 'analytics',
+  SUBMISSIONS: 'submissions',
+  SETTINGS: 'settings'
+};
+
+// Navigation Constants
+export const NAVIGATION = {
+  ADMIN_ROUTES: [
+    { path: '/dashboard', label: 'Dashboard', permission: 'forms.view' },
+    { path: '/forms', label: 'Forms', permission: 'forms.view' },
+    { path: '/submissions', label: 'Submissions', permission: 'submissions.view' },
+    { path: '/analytics', label: 'Analytics', permission: 'analytics.view' },
+    { path: '/settings', label: 'Settings', permission: 'settings.view' }
+  ],
+  USER_ROUTES: [
+    { path: '/forms', label: 'Available Forms', permission: 'forms.view' },
+    { path: '/my-submissions', label: 'My Submissions', permission: 'submissions.view' }
+  ]
 };
 
 // Storage Keys
 export const STORAGE_KEYS = {
   SAVED_FORMS: 'formBuilder_savedForms',
   USER_PREFERENCES: 'formBuilder_preferences',
-  DRAFT_FORM: 'formBuilder_draft'
+  DRAFT_FORM: 'formBuilder_draft',
+  USER_ROLE: 'formBuilder_userRole',
+  PERMISSIONS: 'formBuilder_permissions',
+  SESSION_DATA: 'formBuilder_session'
 };
 
 // API Endpoints (for future Firebase integration)
@@ -171,7 +258,9 @@ export const API_ENDPOINTS = {
   FORMS: '/forms',
   SUBMISSIONS: '/submissions',
   USERS: '/users',
-  TEMPLATES: '/templates'
+  TEMPLATES: '/templates',
+  ANALYTICS: '/analytics',
+  PERMISSIONS: '/permissions'
 };
 
 // Error Codes
@@ -180,7 +269,11 @@ export const ERROR_CODES = {
   NETWORK_ERROR: 'NETWORK_ERROR',
   FILE_UPLOAD_ERROR: 'FILE_UPLOAD_ERROR',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
-  FORM_NOT_FOUND: 'FORM_NOT_FOUND'
+  FORM_NOT_FOUND: 'FORM_NOT_FOUND',
+  ACCESS_DENIED: 'ACCESS_DENIED',
+  INVALID_ROLE: 'INVALID_ROLE',
+  AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED'
 };
 
 // Success Codes
@@ -188,5 +281,41 @@ export const SUCCESS_CODES = {
   FORM_SAVED: 'FORM_SAVED',
   FORM_SUBMITTED: 'FORM_SUBMITTED',
   FIELD_ADDED: 'FIELD_ADDED',
-  FILE_UPLOADED: 'FILE_UPLOADED'
+  FILE_UPLOADED: 'FILE_UPLOADED',
+  ROLE_UPDATED: 'ROLE_UPDATED',
+  PERMISSION_GRANTED: 'PERMISSION_GRANTED',
+  USER_AUTHENTICATED: 'USER_AUTHENTICATED'
+};
+
+// Form Status Constants
+export const FORM_STATUS = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  ARCHIVED: 'archived',
+  INACTIVE: 'inactive'
+};
+
+// Submission Status Constants
+export const SUBMISSION_STATUS = {
+  PENDING: 'pending',
+  SUBMITTED: 'submitted',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+  FAILED: 'failed'
+};
+
+// Cache Constants
+export const CACHE_CONSTANTS = {
+  TTL: {
+    SHORT: 60000,      // 1 minute
+    MEDIUM: 300000,    // 5 minutes
+    LONG: 900000,      // 15 minutes
+    EXTENDED: 3600000  // 1 hour
+  },
+  KEYS: {
+    USER_PERMISSIONS: 'user_permissions',
+    ROLE_CONFIG: 'role_config',
+    FORM_LIST: 'form_list',
+    SUBMISSION_COUNT: 'submission_count'
+  }
 };

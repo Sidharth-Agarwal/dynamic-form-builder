@@ -1,4 +1,4 @@
-// components/Builder/FormBuilder.jsx - Enhanced with Drag & Drop
+// components/Builder/FormBuilder.jsx - Enhanced with Role Awareness
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
@@ -12,16 +12,20 @@ import {
   Copy,
   CheckCircle,
   Zap,
-  BarChart3
+  BarChart3,
+  Shield
 } from 'lucide-react';
 import { useFormBuilder } from '../../hooks/useFormBuilder';
 import { useDragDrop } from '../../hooks/useDragDrop';
+import { usePermissions } from '../../hooks/usePermissions';
+import { useRoleDetection } from '../../hooks/useRoleDetection';
 import FieldSelector from './FieldSelector';
 import FieldEditor from './FieldEditor';
 import FormPreview from './FormPreview';
 import DragDropContainer from './DragDropContainer';
 import Button from '../Common/Button';
 import Modal from '../Common/Modal';
+import PermissionGate from '../Shared/PermissionGate';
 import { MESSAGES } from '../../utils/constants';
 import { getFieldTypeConfig } from '../../utils/fieldTypes';
 
@@ -31,6 +35,9 @@ const FormBuilder = ({
   onCancel,
   className = '' 
 }) => {
+  const { formPermissions, canCreateForms, canEditForms } = usePermissions();
+  const { currentRole, isAdmin, isUser, roleSystemEnabled } = useRoleDetection();
+
   const {
     form,
     selectedField,
@@ -52,6 +59,23 @@ const FormBuilder = ({
   const [saveMessage, setSaveMessage] = useState('');
   const [showFormSettings, setShowFormSettings] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+
+  // Check permissions on mount and role change
+  useEffect(() => {
+    if (roleSystemEnabled) {
+      // Check if user can access form builder
+      const canAccess = initialForm 
+        ? (canEditForms || (initialForm.createdBy === currentRole))
+        : canCreateForms;
+      
+      if (!canAccess) {
+        setAccessDenied(true);
+        return;
+      }
+    }
+    setAccessDenied(false);
+  }, [roleSystemEnabled, canCreateForms, canEditForms, initialForm, currentRole]);
 
   // Initialize form if editing existing form
   useEffect(() => {
@@ -75,6 +99,37 @@ const FormBuilder = ({
     updateForm({ fields: reorderedFields });
   });
 
+  // Access denied view
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
+          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">
+            {initialForm 
+              ? "You don't have permission to edit this form."
+              : "You don't have permission to create forms."
+            }
+          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">Current role: {currentRole}</p>
+            <p className="text-sm text-gray-500">
+              Required: {initialForm ? 'forms.edit' : 'forms.create'} permission
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="mt-4"
+          >
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // Get selected field object
   const selectedFieldObject = selectedField 
     ? form.fields.find(field => field.id === selectedField)
@@ -94,9 +149,26 @@ const FormBuilder = ({
       return;
     }
 
+    // Check save permissions
+    if (roleSystemEnabled && !formPermissions.canCreate && !formPermissions.canEdit) {
+      setSaveMessage('❌ You do not have permission to save forms');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const savedForm = await onSave(form);
+      
+      // Add role-based metadata
+      const formToSave = {
+        ...form,
+        createdBy: form.createdBy || currentRole,
+        lastModifiedBy: currentRole,
+        visibility: determineFormVisibility(),
+        allowedRoles: determineAllowedRoles()
+      };
+      
+      const savedForm = await onSave(formToSave);
       setSaveMessage('✅ Form saved successfully!');
       setHasUnsavedChanges(false);
       setTimeout(() => setSaveMessage(''), 3000);
@@ -108,6 +180,20 @@ const FormBuilder = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const determineFormVisibility = () => {
+    if (isAdmin) {
+      return form.visibility || 'public';
+    }
+    return 'private'; // Non-admin users create private forms by default
+  };
+
+  const determineAllowedRoles = () => {
+    if (isAdmin) {
+      return form.allowedRoles || ['admin', 'user'];
+    }
+    return [currentRole]; // User can only allow their own role
   };
 
   const handleFormSettingsUpdate = (updates) => {
@@ -136,14 +222,27 @@ const FormBuilder = ({
   };
 
   const handleAddField = (fieldType) => {
+    // Check if user can add fields
+    if (roleSystemEnabled && !canCreateForms && !canEditForms) {
+      setSaveMessage('❌ You do not have permission to add fields');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    
     addField(fieldType);
-    // Show success message
     const fieldConfig = getFieldTypeConfig(fieldType);
     setSaveMessage(`✅ ${fieldConfig?.label || 'Field'} added!`);
     setTimeout(() => setSaveMessage(''), 2000);
   };
 
   const handleDeleteField = (fieldId) => {
+    // Check if user can delete fields
+    if (roleSystemEnabled && !canEditForms && form.createdBy !== currentRole) {
+      setSaveMessage('❌ You do not have permission to delete fields');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    
     if (window.confirm('Delete this field? This action cannot be undone.')) {
       deleteField(fieldId);
       setSaveMessage('✅ Field deleted');
@@ -152,12 +251,26 @@ const FormBuilder = ({
   };
 
   const handleDuplicateField = (fieldId) => {
+    // Check if user can duplicate fields
+    if (roleSystemEnabled && !canCreateForms && !canEditForms) {
+      setSaveMessage('❌ You do not have permission to duplicate fields');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    
     duplicateField(fieldId);
     setSaveMessage('✅ Field duplicated');
     setTimeout(() => setSaveMessage(''), 2000);
   };
 
   const handleClearAll = () => {
+    // Check if user can clear fields
+    if (roleSystemEnabled && !canEditForms && form.createdBy !== currentRole) {
+      setSaveMessage('❌ You do not have permission to clear fields');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    
     if (window.confirm('Clear all fields? This action cannot be undone.')) {
       updateForm({ fields: [] });
       setSelectedField(null);
@@ -195,6 +308,12 @@ const FormBuilder = ({
                 <span>{formStats.totalFields} field{formStats.totalFields !== 1 ? 's' : ''}</span>
                 <span>{formStats.requiredFields} required</span>
                 <span>{initialForm ? 'Editing' : 'Creating new form'}</span>
+                {roleSystemEnabled && (
+                  <span className="flex items-center">
+                    <Shield className="w-3 h-3 mr-1" />
+                    {currentRole}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -216,13 +335,15 @@ const FormBuilder = ({
               </span>
             </div>
 
-            <Button
-              variant="ghost"
-              icon={Settings}
-              onClick={() => setShowFormSettings(true)}
-            >
-              Settings
-            </Button>
+            <PermissionGate permission="settings.view" showFallback={false}>
+              <Button
+                variant="ghost"
+                icon={Settings}
+                onClick={() => setShowFormSettings(true)}
+              >
+                Settings
+              </Button>
+            </PermissionGate>
 
             <Button
               variant="outline"
@@ -232,15 +353,20 @@ const FormBuilder = ({
               {isPreviewMode ? 'Hide' : 'Show'} Preview
             </Button>
 
-            <Button
-              variant="primary"
-              icon={Save}
-              loading={isSaving}
-              onClick={handleSaveForm}
-              disabled={!canSaveForm()}
+            <PermissionGate 
+              permissions={['forms.create', 'forms.edit']} 
+              showFallback={false}
             >
-              {isSaving ? 'Saving...' : 'Save Form'}
-            </Button>
+              <Button
+                variant="primary"
+                icon={Save}
+                loading={isSaving}
+                onClick={handleSaveForm}
+                disabled={!canSaveForm()}
+              >
+                {isSaving ? 'Saving...' : 'Save Form'}
+              </Button>
+            </PermissionGate>
           </div>
         </div>
       </div>
@@ -267,14 +393,19 @@ const FormBuilder = ({
               
               <div className="flex items-center gap-2">
                 {form.fields.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={handleClearAll}
-                    className="text-gray-500 hover:text-red-600"
+                  <PermissionGate 
+                    permissions={['forms.edit']} 
+                    showFallback={false}
                   >
-                    Clear All
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={handleClearAll}
+                      className="text-gray-500 hover:text-red-600"
+                    >
+                      Clear All
+                    </Button>
+                  </PermissionGate>
                 )}
               </div>
             </div>
@@ -303,6 +434,7 @@ const FormBuilder = ({
                     const fieldConfig = getFieldTypeConfig(field.type);
                     const IconComponent = fieldConfig?.icon;
                     const isBeingDragged = isItemBeingDragged(field.id);
+                    const canEditThisField = !roleSystemEnabled || canEditForms || form.createdBy === currentRole;
                     
                     return (
                       <div
@@ -314,6 +446,7 @@ const FormBuilder = ({
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                           }
                           ${isBeingDragged ? 'opacity-50 scale-105 rotate-1' : ''}
+                          ${!canEditThisField ? 'opacity-75' : ''}
                         `}
                       >
                         <div className="flex items-center justify-between">
@@ -341,6 +474,9 @@ const FormBuilder = ({
                                 <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize flex-shrink-0">
                                   {field.type}
                                 </span>
+                                {!canEditThisField && (
+                                  <Shield className="w-3 h-3 text-gray-400 flex-shrink-0" title="Read-only" />
+                                )}
                               </div>
                               
                               {field.helpText && (
@@ -371,31 +507,37 @@ const FormBuilder = ({
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-1 ml-3">
-                            <Button
-                              variant="ghost"
-                              size="small"
-                              icon={Copy}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDuplicateField(field.id);
-                              }}
-                              className="text-gray-400 hover:text-blue-600"
-                              title="Duplicate field"
-                            />
-                            
-                            <Button
-                              variant="ghost"
-                              size="small"
-                              icon={Trash2}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteField(field.id);
-                              }}
-                              className="text-gray-400 hover:text-red-600"
-                              title="Delete field"
-                            />
-                          </div>
+                          {canEditThisField && (
+                            <div className="flex items-center gap-1 ml-3">
+                              <PermissionGate permission="forms.duplicate" showFallback={false}>
+                                <Button
+                                  variant="ghost"
+                                  size="small"
+                                  icon={Copy}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDuplicateField(field.id);
+                                  }}
+                                  className="text-gray-400 hover:text-blue-600"
+                                  title="Duplicate field"
+                                />
+                              </PermissionGate>
+                              
+                              <PermissionGate permission="forms.edit" showFallback={false}>
+                                <Button
+                                  variant="ghost"
+                                  size="small"
+                                  icon={Trash2}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteField(field.id);
+                                  }}
+                                  className="text-gray-400 hover:text-red-600"
+                                  title="Delete field"
+                                />
+                              </PermissionGate>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -406,29 +548,36 @@ const FormBuilder = ({
           </div>
 
           {/* Field Selector */}
-          <FieldSelector onAddField={handleAddField} />
+          <PermissionGate permissions={['forms.create', 'forms.edit']} showFallback={false}>
+            <FieldSelector onAddField={handleAddField} />
+          </PermissionGate>
 
           {/* Field Editor */}
           {selectedFieldObject && (
-            <FieldEditor
-              field={selectedFieldObject}
-              onUpdateField={updateField}
-              onDeleteField={handleDeleteField}
-              onDuplicateField={handleDuplicateField}
-            />
+            <PermissionGate permissions={['forms.edit']} showFallback={false}>
+              <FieldEditor
+                field={selectedFieldObject}
+                onUpdateField={updateField}
+                onDeleteField={handleDeleteField}
+                onDuplicateField={handleDuplicateField}
+              />
+            </PermissionGate>
           )}
 
           {/* Help Section */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-medium text-blue-900 mb-2 flex items-center">
               <Zap className="w-4 h-4 mr-2" />
-              Pro Tips
+              {roleSystemEnabled ? `${currentRole} Tips` : 'Pro Tips'}
             </h4>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Drag fields to reorder them</li>
               <li>• Click a field to edit its properties</li>
               <li>• Use the preview to test your form</li>
               <li>• Required fields show a red asterisk (*)</li>
+              {roleSystemEnabled && !isAdmin && (
+                <li>• 🔒 Some features require admin permissions</li>
+              )}
             </ul>
           </div>
         </div>
@@ -480,6 +629,7 @@ const FormBuilder = ({
                 onChange={(e) => handleFormSettingsUpdate({ title: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter form title"
+                disabled={roleSystemEnabled && !canEditForms && form.createdBy !== currentRole}
               />
             </div>
 
@@ -493,8 +643,29 @@ const FormBuilder = ({
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter form description (optional)"
+                disabled={roleSystemEnabled && !canEditForms && form.createdBy !== currentRole}
               />
             </div>
+
+            {/* Role-based visibility settings */}
+            {roleSystemEnabled && isAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Form Visibility
+                </label>
+                <select
+                  value={form.visibility || 'private'}
+                  onChange={(e) => handleFormSettingsUpdate({ visibility: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="private">Private</option>
+                  <option value="public">Public</option>
+                </select>
+                <p className="text-sm text-gray-500 mt-1">
+                  Public forms can be accessed by all users
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Form Statistics */}
@@ -527,10 +698,12 @@ const FormBuilder = ({
                   <span className="text-gray-500">Field Types:</span>
                   <span className="font-medium">{Object.keys(formStats.fieldTypes).length}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Form ID:</span>
-                  <span className="font-mono text-xs">{form.id?.slice(-8) || 'Not saved'}</span>
-                </div>
+                {roleSystemEnabled && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Created By:</span>
+                    <span className="font-medium">{form.createdBy || currentRole}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

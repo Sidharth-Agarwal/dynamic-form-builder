@@ -1,6 +1,8 @@
-// hooks/useFormManager.js - Updated with Firebase Integration
-import { useState, useEffect, useCallback } from 'react';
+// hooks/useFormManager.js - Updated with Role System Integration
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFirebase } from '../context/FormBuilderProvider';
+import { useRoleDetection } from './useRoleDetection';
+import { usePermissions } from './usePermissions';
 import {
   saveFormToFirestore,
   getFormsFromFirestore,
@@ -12,26 +14,45 @@ import {
 
 export const useFormManager = (userId = null) => {
   const { db } = useFirebase();
+  const { currentRole, isAdmin, roleSystemEnabled } = useRoleDetection();
+  const { formPermissions, canAccessForm, canEditForm, canDeleteForm } = usePermissions();
+  
   const [savedForms, setSavedForms] = useState([]);
   const [currentForm, setCurrentForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
 
-  // Load forms from Firestore on mount
+  // Load forms from Firestore on mount with role-based filtering
   useEffect(() => {
-    if (!db) return;
+    if (!db || !formPermissions.canView) {
+      setLoading(false);
+      return;
+    }
 
     const loadForms = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // Don't filter by userId for now - get all forms
-        const forms = await getFormsFromFirestore(db, null);
-        setSavedForms(forms);
+        // Get forms based on role
+        let forms;
+        if (roleSystemEnabled && !isAdmin) {
+          // For non-admin users, filter by their role or public forms
+          forms = await getFormsFromFirestore(db, currentRole);
+        } else {
+          // For admins or when role system is disabled, get all forms
+          forms = await getFormsFromFirestore(db, null);
+        }
+        
+        // Apply additional role-based filtering
+        const accessibleForms = forms.filter(form => canAccessForm(form));
+        
+        setSavedForms(accessibleForms);
+        setIsOnline(true);
       } catch (err) {
         setError(err.message);
+        setIsOnline(false);
         console.error('Error loading forms:', err);
         
         // Fallback to localStorage if Firestore fails
@@ -39,7 +60,8 @@ export const useFormManager = (userId = null) => {
           const localForms = localStorage.getItem('formBuilder_savedForms');
           if (localForms) {
             const parsedForms = JSON.parse(localForms);
-            setSavedForms(parsedForms);
+            const accessibleForms = parsedForms.filter(form => canAccessForm(form));
+            setSavedForms(accessibleForms);
           }
         } catch (localError) {
           console.error('Error loading from localStorage:', localError);
@@ -50,23 +72,27 @@ export const useFormManager = (userId = null) => {
     };
 
     loadForms();
-  }, [db, userId]);
+  }, [db, currentRole, isAdmin, roleSystemEnabled, formPermissions.canView, canAccessForm]);
 
-  // Set up real-time listener for forms
+  // Set up real-time listener for forms with role filtering
   useEffect(() => {
-    if (!db) return;
+    if (!db || !formPermissions.canView) return;
 
     let unsubscribe;
     
     try {
+      const userIdForQuery = roleSystemEnabled && !isAdmin ? currentRole : null;
+      
       unsubscribe = subscribeToForms(db, (forms) => {
-        setSavedForms(forms);
+        // Apply role-based filtering to real-time updates
+        const accessibleForms = forms.filter(form => canAccessForm(form));
+        setSavedForms(accessibleForms);
         setLoading(false);
         setIsOnline(true);
         
         // Also save to localStorage as backup
-        localStorage.setItem('formBuilder_savedForms', JSON.stringify(forms));
-      }, null); // Don't filter by userId for now
+        localStorage.setItem('formBuilder_savedForms', JSON.stringify(accessibleForms));
+      }, userIdForQuery);
     } catch (err) {
       console.error('Error setting up real-time listener:', err);
       setIsOnline(false);
@@ -77,10 +103,14 @@ export const useFormManager = (userId = null) => {
         unsubscribe();
       }
     };
-  }, [db, userId]);
+  }, [db, currentRole, isAdmin, roleSystemEnabled, formPermissions.canView, canAccessForm]);
 
-  // Save form to Firestore
+  // Save form to Firestore with role-based permissions
   const saveForm = useCallback(async (formData) => {
+    if (!formPermissions.canCreate && !formPermissions.canEdit) {
+      throw new Error('Permission denied: Cannot create or edit forms');
+    }
+
     if (!db) {
       throw new Error('Database not available');
     }
@@ -88,21 +118,34 @@ export const useFormManager = (userId = null) => {
     try {
       setError(null);
       
-      // Add metadata
+      // Add role-based metadata
       const formToSave = {
         ...formData,
         id: formData.id || `form_${Date.now()}`,
-        createdBy: userId || 'anonymous',
-        version: formData.version || 1
+        createdBy: userId || currentRole || 'anonymous',
+        lastModifiedBy: currentRole || 'anonymous',
+        version: formData.version || 1,
+        // Add role-based access control
+        visibility: determineFormVisibility(formData),
+        allowedRoles: formData.allowedRoles || (isAdmin ? ['admin', 'user'] : [currentRole])
       };
 
       let savedForm;
       
       if (formData.id && savedForms.find(f => f.id === formData.id)) {
+        // Check edit permissions for existing form
+        const existingForm = savedForms.find(f => f.id === formData.id);
+        if (!canEditForm(existingForm)) {
+          throw new Error('Permission denied: Cannot edit this form');
+        }
+        
         // Update existing form
         savedForm = await updateFormInFirestore(db, formData.id, formToSave);
       } else {
         // Create new form
+        if (!formPermissions.canCreate) {
+          throw new Error('Permission denied: Cannot create new forms');
+        }
         savedForm = await saveFormToFirestore(db, formToSave);
       }
 
@@ -123,29 +166,42 @@ export const useFormManager = (userId = null) => {
       setError(err.message);
       console.error('Error saving form:', err);
       
-      // Fallback to localStorage
-      try {
-        const localForms = [...savedForms];
-        const existingIndex = localForms.findIndex(f => f.id === formData.id);
-        
-        if (existingIndex >= 0) {
-          localForms[existingIndex] = formData;
-        } else {
-          localForms.unshift(formData);
+      // Fallback to localStorage for non-permission errors
+      if (!err.message.includes('Permission denied')) {
+        try {
+          const localForms = [...savedForms];
+          const existingIndex = localForms.findIndex(f => f.id === formData.id);
+          
+          if (existingIndex >= 0) {
+            localForms[existingIndex] = formData;
+          } else {
+            localForms.unshift(formData);
+          }
+          
+          localStorage.setItem('formBuilder_savedForms', JSON.stringify(localForms));
+          setSavedForms(localForms);
+          
+          return formData;
+        } catch (localError) {
+          throw new Error('Failed to save form both online and offline');
         }
-        
-        localStorage.setItem('formBuilder_savedForms', JSON.stringify(localForms));
-        setSavedForms(localForms);
-        
-        return formData;
-      } catch (localError) {
-        throw new Error('Failed to save form both online and offline');
       }
+      
+      throw err;
     }
-  }, [db, userId, savedForms]);
+  }, [db, currentRole, userId, isAdmin, savedForms, formPermissions, canEditForm]);
 
-  // Delete form from Firestore
+  // Delete form from Firestore with role-based permissions
   const deleteForm = useCallback(async (formId) => {
+    const formToDelete = savedForms.find(f => f.id === formId);
+    if (!formToDelete) {
+      throw new Error('Form not found');
+    }
+
+    if (!canDeleteForm(formToDelete)) {
+      throw new Error('Permission denied: Cannot delete this form');
+    }
+
     if (!db) {
       throw new Error('Database not available');
     }
@@ -163,13 +219,21 @@ export const useFormManager = (userId = null) => {
       console.error('Error deleting form:', err);
       throw err;
     }
-  }, [db]);
+  }, [db, savedForms, canDeleteForm]);
 
-  // Duplicate form
+  // Duplicate form with role-based permissions
   const duplicateForm = useCallback(async (formId) => {
+    if (!formPermissions.canCreate) {
+      throw new Error('Permission denied: Cannot create forms');
+    }
+
     const formToDuplicate = savedForms.find(form => form.id === formId);
     if (!formToDuplicate) {
       throw new Error('Form not found');
+    }
+
+    if (!canAccessForm(formToDuplicate)) {
+      throw new Error('Permission denied: Cannot access this form');
     }
 
     const duplicatedForm = {
@@ -178,24 +242,30 @@ export const useFormManager = (userId = null) => {
       title: `${formToDuplicate.title} (Copy)`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      createdBy: currentRole || 'anonymous',
       version: 1
     };
 
     return await saveForm(duplicatedForm);
-  }, [savedForms, saveForm]);
+  }, [savedForms, formPermissions.canCreate, canAccessForm, saveForm, currentRole]);
 
-  // Get form by ID
+  // Get form by ID with permission check
   const getForm = useCallback(async (formId) => {
     try {
       // First check local state
       const localForm = savedForms.find(form => form.id === formId);
-      if (localForm) {
+      if (localForm && canAccessForm(localForm)) {
         return localForm;
       }
 
       // If not found locally and we have database connection, fetch from Firestore
-      if (db) {
+      if (db && formPermissions.canView) {
         const form = await getFormFromFirestore(db, formId);
+        
+        // Check permissions
+        if (!canAccessForm(form)) {
+          throw new Error('Permission denied: Cannot access this form');
+        }
         
         // Add to local state
         setSavedForms(prev => {
@@ -212,13 +282,43 @@ export const useFormManager = (userId = null) => {
       setError(err.message);
       return null;
     }
-  }, [db, savedForms]);
+  }, [db, savedForms, canAccessForm, formPermissions.canView]);
 
-  // Get forms statistics
+  // Filter forms based on role and permissions
+  const getFilteredForms = useCallback((filterOptions = {}) => {
+    let filtered = [...savedForms];
+    
+    // Apply role-based filtering
+    filtered = filtered.filter(form => canAccessForm(form));
+    
+    // Apply additional filters
+    if (filterOptions.status) {
+      filtered = filtered.filter(form => form.status === filterOptions.status);
+    }
+    
+    if (filterOptions.createdBy && isAdmin) {
+      filtered = filtered.filter(form => form.createdBy === filterOptions.createdBy);
+    }
+    
+    if (filterOptions.searchTerm) {
+      const term = filterOptions.searchTerm.toLowerCase();
+      filtered = filtered.filter(form => 
+        form.title?.toLowerCase().includes(term) ||
+        form.description?.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
+  }, [savedForms, canAccessForm, isAdmin]);
+
+  // Get forms statistics with role consideration
   const getFormsStats = useCallback(() => {
-    const totalForms = savedForms.length;
-    const totalFields = savedForms.reduce((sum, form) => sum + (form.fields?.length || 0), 0);
-    const recentForms = savedForms.filter(form => {
+    const accessibleForms = savedForms.filter(form => canAccessForm(form));
+    const editableForms = savedForms.filter(form => canEditForm(form));
+    const deletableForms = savedForms.filter(form => canDeleteForm(form));
+    
+    const totalFields = accessibleForms.reduce((sum, form) => sum + (form.fields?.length || 0), 0);
+    const recentForms = accessibleForms.filter(form => {
       const formDate = new Date(form.updatedAt);
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
@@ -226,52 +326,96 @@ export const useFormManager = (userId = null) => {
     }).length;
 
     return {
-      totalForms,
+      totalForms: accessibleForms.length,
+      editableForms: editableForms.length,
+      deletableForms: deletableForms.length,
       totalFields,
       recentForms,
-      averageFieldsPerForm: totalForms > 0 ? Math.round(totalFields / totalForms) : 0
+      averageFieldsPerForm: accessibleForms.length > 0 
+        ? Math.round(totalFields / accessibleForms.length) 
+        : 0,
+      byStatus: accessibleForms.reduce((acc, form) => {
+        const status = form.status || 'draft';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {}),
+      userPermissions: {
+        canCreate: formPermissions.canCreate,
+        canEdit: formPermissions.canEdit,
+        canDelete: formPermissions.canDelete,
+        canView: formPermissions.canView
+      }
     };
-  }, [savedForms]);
+  }, [savedForms, canAccessForm, canEditForm, canDeleteForm, formPermissions]);
 
-  // Search forms
+  // Search forms with role filtering
   const searchForms = useCallback((searchTerm) => {
     if (!searchTerm.trim()) {
-      return savedForms;
+      return savedForms.filter(form => canAccessForm(form));
     }
 
-    const term = searchTerm.toLowerCase();
+    return getFilteredForms({ searchTerm });
+  }, [savedForms, canAccessForm, getFilteredForms]);
+
+  // Get user's own forms
+  const getMyForms = useCallback(() => {
     return savedForms.filter(form => 
-      form.title?.toLowerCase().includes(term) ||
-      form.description?.toLowerCase().includes(term) ||
-      form.fields?.some(field => field.label?.toLowerCase().includes(term))
+      canAccessForm(form) && 
+      (form.createdBy === currentRole || form.createdBy === userId)
     );
-  }, [savedForms]);
+  }, [savedForms, canAccessForm, currentRole, userId]);
+
+  // Get public forms (for users)
+  const getPublicForms = useCallback(() => {
+    return savedForms.filter(form => 
+      canAccessForm(form) && 
+      (form.visibility === 'public' || form.allowedRoles?.includes(currentRole))
+    );
+  }, [savedForms, canAccessForm, currentRole]);
+
+  // Determine form visibility based on role
+  const determineFormVisibility = (formData) => {
+    if (isAdmin) {
+      return formData.visibility || 'public';
+    }
+    return 'private'; // Non-admin users create private forms by default
+  };
 
   // Clear error
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
-  // Refresh forms
+  // Refresh forms with role consideration
   const refreshForms = useCallback(async () => {
-    if (!db) return;
+    if (!db || !formPermissions.canView) return;
 
     try {
       setLoading(true);
       setError(null);
-      const forms = await getFormsFromFirestore(db, null);
-      setSavedForms(forms);
+      
+      const userIdForQuery = roleSystemEnabled && !isAdmin ? currentRole : null;
+      const forms = await getFormsFromFirestore(db, userIdForQuery);
+      const accessibleForms = forms.filter(form => canAccessForm(form));
+      
+      setSavedForms(accessibleForms);
     } catch (err) {
       setError(err.message);
       console.error('Error refreshing forms:', err);
     } finally {
       setLoading(false);
     }
-  }, [db, userId]);
+  }, [db, currentRole, isAdmin, roleSystemEnabled, formPermissions.canView, canAccessForm]);
+
+  // Filtered forms for current user based on role
+  const userAccessibleForms = useMemo(() => {
+    return savedForms.filter(form => canAccessForm(form));
+  }, [savedForms, canAccessForm]);
 
   return {
     // State
-    savedForms,
+    savedForms: userAccessibleForms,
+    allForms: savedForms, // Raw forms (for admin use)
     currentForm,
     loading,
     error,
@@ -286,8 +430,25 @@ export const useFormManager = (userId = null) => {
     clearError,
     refreshForms,
     
-    // Utilities
+    // Filtering and searching
+    getFilteredForms,
+    searchForms,
+    getMyForms,
+    getPublicForms,
+    
+    // Statistics
     getFormsStats,
-    searchForms
+    
+    // Role-based permissions
+    permissions: formPermissions,
+    canCreateForms: formPermissions.canCreate,
+    canEditForms: formPermissions.canEdit,
+    canDeleteForms: formPermissions.canDelete,
+    canViewForms: formPermissions.canView,
+    
+    // Role context
+    currentRole,
+    isAdmin,
+    roleSystemEnabled
   };
 };
