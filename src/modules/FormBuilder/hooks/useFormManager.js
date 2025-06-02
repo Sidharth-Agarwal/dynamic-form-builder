@@ -1,4 +1,4 @@
-// hooks/useFormManager.js - Updated with Firebase Integration
+// hooks/useFormManager.js - Enhanced with Submissions Integration
 import { useState, useEffect, useCallback } from 'react';
 import { useFirebase } from '../context/FormBuilderProvider';
 import {
@@ -7,8 +7,11 @@ import {
   updateFormInFirestore,
   deleteFormFromFirestore,
   getFormFromFirestore,
-  subscribeToForms
+  subscribeToForms,
+  getSubmissionCount,
+  getFormAnalytics
 } from '../services/firebase';
+import { LOADING_STATES, ERROR_CODES } from '../utils/constants';
 
 export const useFormManager = (userId = null) => {
   const { db } = useFirebase();
@@ -17,6 +20,7 @@ export const useFormManager = (userId = null) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
+  const [formAnalytics, setFormAnalytics] = useState({}); // Cache for form analytics
 
   // Load forms from Firestore on mount
   useEffect(() => {
@@ -27,9 +31,12 @@ export const useFormManager = (userId = null) => {
         setLoading(true);
         setError(null);
         
-        // Don't filter by userId for now - get all forms
-        const forms = await getFormsFromFirestore(db, null);
+        const forms = await getFormsFromFirestore(db, userId);
         setSavedForms(forms);
+        
+        // Load analytics for each form
+        await loadFormsAnalytics(forms);
+        
       } catch (err) {
         setError(err.message);
         console.error('Error loading forms:', err);
@@ -59,14 +66,17 @@ export const useFormManager = (userId = null) => {
     let unsubscribe;
     
     try {
-      unsubscribe = subscribeToForms(db, (forms) => {
+      unsubscribe = subscribeToForms(db, async (forms) => {
         setSavedForms(forms);
         setLoading(false);
         setIsOnline(true);
         
+        // Load analytics for updated forms
+        await loadFormsAnalytics(forms);
+        
         // Also save to localStorage as backup
         localStorage.setItem('formBuilder_savedForms', JSON.stringify(forms));
-      }, null); // Don't filter by userId for now
+      }, userId);
     } catch (err) {
       console.error('Error setting up real-time listener:', err);
       setIsOnline(false);
@@ -78,6 +88,36 @@ export const useFormManager = (userId = null) => {
       }
     };
   }, [db, userId]);
+
+  // Load analytics for multiple forms
+  const loadFormsAnalytics = useCallback(async (forms) => {
+    if (!db || !forms.length) return;
+
+    try {
+      const analyticsPromises = forms.map(async (form) => {
+        try {
+          const analytics = await getFormAnalytics(db, form.id);
+          return { formId: form.id, analytics };
+        } catch (err) {
+          console.warn(`Failed to load analytics for form ${form.id}:`, err);
+          return { formId: form.id, analytics: null };
+        }
+      });
+
+      const analyticsResults = await Promise.all(analyticsPromises);
+      
+      const analyticsMap = {};
+      analyticsResults.forEach(({ formId, analytics }) => {
+        if (analytics) {
+          analyticsMap[formId] = analytics;
+        }
+      });
+
+      setFormAnalytics(analyticsMap);
+    } catch (err) {
+      console.error('Error loading forms analytics:', err);
+    }
+  }, [db]);
 
   // Save form to Firestore
   const saveForm = useCallback(async (formData) => {
@@ -157,6 +197,13 @@ export const useFormManager = (userId = null) => {
       // Update local state immediately
       setSavedForms(prev => prev.filter(form => form.id !== formId));
       
+      // Remove analytics cache
+      setFormAnalytics(prev => {
+        const updated = { ...prev };
+        delete updated[formId];
+        return updated;
+      });
+      
       return formId;
     } catch (err) {
       setError(err.message);
@@ -178,7 +225,9 @@ export const useFormManager = (userId = null) => {
       title: `${formToDuplicate.title} (Copy)`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      version: 1
+      version: 1,
+      submissionCount: 0, // Reset submission count for duplicated form
+      lastSubmission: null
     };
 
     return await saveForm(duplicatedForm);
@@ -214,10 +263,50 @@ export const useFormManager = (userId = null) => {
     }
   }, [db, savedForms]);
 
+  // Get form analytics
+  const getFormAnalyticsById = useCallback(async (formId, refresh = false) => {
+    if (!refresh && formAnalytics[formId]) {
+      return formAnalytics[formId];
+    }
+
+    if (!db) return null;
+
+    try {
+      const analytics = await getFormAnalytics(db, formId);
+      
+      // Update cache
+      setFormAnalytics(prev => ({
+        ...prev,
+        [formId]: analytics
+      }));
+      
+      return analytics;
+    } catch (err) {
+      console.error('Error getting form analytics:', err);
+      return null;
+    }
+  }, [db, formAnalytics]);
+
+  // Get submission count for a form
+  const getFormSubmissionCount = useCallback(async (formId) => {
+    if (!db) return 0;
+
+    try {
+      return await getSubmissionCount(db, formId);
+    } catch (err) {
+      console.error('Error getting submission count:', err);
+      return 0;
+    }
+  }, [db]);
+
   // Get forms statistics
   const getFormsStats = useCallback(() => {
     const totalForms = savedForms.length;
     const totalFields = savedForms.reduce((sum, form) => sum + (form.fields?.length || 0), 0);
+    const totalSubmissions = Object.values(formAnalytics).reduce(
+      (sum, analytics) => sum + (analytics?.totalSubmissions || 0), 0
+    );
+    
     const recentForms = savedForms.filter(form => {
       const formDate = new Date(form.updatedAt);
       const weekAgo = new Date();
@@ -225,13 +314,20 @@ export const useFormManager = (userId = null) => {
       return formDate >= weekAgo;
     }).length;
 
+    const activeForms = savedForms.filter(form => 
+      formAnalytics[form.id]?.totalSubmissions > 0
+    ).length;
+
     return {
       totalForms,
       totalFields,
+      totalSubmissions,
       recentForms,
-      averageFieldsPerForm: totalForms > 0 ? Math.round(totalFields / totalForms) : 0
+      activeForms,
+      averageFieldsPerForm: totalForms > 0 ? Math.round(totalFields / totalForms) : 0,
+      averageSubmissionsPerForm: totalForms > 0 ? Math.round(totalSubmissions / totalForms) : 0
     };
-  }, [savedForms]);
+  }, [savedForms, formAnalytics]);
 
   // Search forms
   const searchForms = useCallback((searchTerm) => {
@@ -247,27 +343,73 @@ export const useFormManager = (userId = null) => {
     );
   }, [savedForms]);
 
-  // Clear error
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
+  // Get forms with enhanced data (including analytics)
+  const getFormsWithAnalytics = useCallback(() => {
+    return savedForms.map(form => ({
+      ...form,
+      analytics: formAnalytics[form.id] || {
+        totalSubmissions: 0,
+        submissionsToday: 0,
+        submissionsThisWeek: 0,
+        submissionsThisMonth: 0,
+        lastSubmission: null
+      }
+    }));
+  }, [savedForms, formAnalytics]);
 
-  // Refresh forms
+  // Get popular forms (by submission count)
+  const getPopularForms = useCallback((limit = 5) => {
+    return getFormsWithAnalytics()
+      .sort((a, b) => (b.analytics?.totalSubmissions || 0) - (a.analytics?.totalSubmissions || 0))
+      .slice(0, limit);
+  }, [getFormsWithAnalytics]);
+
+  // Get recent forms
+  const getRecentForms = useCallback((limit = 5) => {
+    return savedForms
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+      .slice(0, limit);
+  }, [savedForms]);
+
+  // Refresh forms and analytics
   const refreshForms = useCallback(async () => {
     if (!db) return;
 
     try {
       setLoading(true);
       setError(null);
-      const forms = await getFormsFromFirestore(db, null);
+      const forms = await getFormsFromFirestore(db, userId);
       setSavedForms(forms);
+      await loadFormsAnalytics(forms);
     } catch (err) {
       setError(err.message);
       console.error('Error refreshing forms:', err);
     } finally {
       setLoading(false);
     }
-  }, [db, userId]);
+  }, [db, userId, loadFormsAnalytics]);
+
+  // Clear error
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  // Update form status (active/inactive)
+  const updateFormStatus = useCallback(async (formId, status) => {
+    try {
+      await updateFormInFirestore(db, formId, { status });
+      
+      // Update local state
+      setSavedForms(prev => prev.map(form =>
+        form.id === formId ? { ...form, status } : form
+      ));
+      
+      return true;
+    } catch (err) {
+      console.error('Error updating form status:', err);
+      throw err;
+    }
+  }, [db]);
 
   return {
     // State
@@ -276,6 +418,7 @@ export const useFormManager = (userId = null) => {
     loading,
     error,
     isOnline,
+    formAnalytics,
     
     // Actions
     saveForm,
@@ -285,9 +428,18 @@ export const useFormManager = (userId = null) => {
     setCurrentForm,
     clearError,
     refreshForms,
+    updateFormStatus,
+    
+    // Analytics
+    getFormAnalyticsById,
+    getFormSubmissionCount,
+    loadFormsAnalytics,
     
     // Utilities
     getFormsStats,
-    searchForms
+    searchForms,
+    getFormsWithAnalytics,
+    getPopularForms,
+    getRecentForms
   };
 };
