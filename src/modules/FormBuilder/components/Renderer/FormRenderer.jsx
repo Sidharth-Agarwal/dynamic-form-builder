@@ -1,4 +1,3 @@
-// components/Renderer/FormRenderer.jsx
 import React, { useState } from 'react';
 import { CheckCircle, AlertCircle, Send } from 'lucide-react';
 import FieldRenderer from './FieldRenderer';
