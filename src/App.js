@@ -1,4 +1,4 @@
-// App.js - Updated with FormBuilderProvider
+// App.js - Updated with Submissions Management Integration
 import React, { useState } from 'react';
 import { 
   FormBuilderProvider, 
@@ -7,9 +7,11 @@ import {
   useFormManager,
   createFormBuilderConfig 
 } from './modules/FormBuilder';
+import { SubmissionsProvider } from './modules/FormBuilder/context/SubmissionsProvider';
+import SubmissionDashboard from './modules/FormBuilder/components/Submissions/SubmissionDashboard';
 import { firebaseApp } from './config/firebaseConfig';
 import Button from './modules/FormBuilder/components/Common/Button';
-import { FileText, Eye, List, Plus, Settings } from 'lucide-react';
+import { FileText, Eye, List, Plus, Settings, BarChart3, Users } from 'lucide-react';
 
 // Form Builder Wrapper Component that uses the hook correctly
 const FormBuilderWrapper = ({ onSave, onCancel }) => {
@@ -33,8 +35,8 @@ const FormBuilderWrapper = ({ onSave, onCancel }) => {
   );
 };
 
-// Dashboard Component that uses the hook
-const AdminDashboard = ({ onCreateForm, onSelectForm, onEditForm }) => {
+// Admin Dashboard Component that uses the hook
+const AdminDashboard = ({ onCreateForm, onSelectForm, onEditForm, onViewSubmissions }) => {
   const { savedForms, loading, error } = useFormManager();
 
   return (
@@ -62,10 +64,12 @@ const AdminDashboard = ({ onCreateForm, onSelectForm, onEditForm }) => {
         
         <div className="bg-white p-6 rounded-lg shadow border">
           <div className="flex items-center">
-            <Eye className="w-8 h-8 text-green-600" />
+            <BarChart3 className="w-8 h-8 text-green-600" />
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Submissions</p>
-              <p className="text-2xl font-bold text-gray-900">0</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {savedForms.reduce((total, form) => total + (form.submissionCount || 0), 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -123,12 +127,25 @@ const AdminDashboard = ({ onCreateForm, onSelectForm, onEditForm }) => {
                           <FileText className="w-3 h-3 mr-1" />
                           {form.fields?.length || 0} fields
                         </span>
+                        <span className="flex items-center">
+                          <BarChart3 className="w-3 h-3 mr-1" />
+                          {form.submissionCount || 0} submissions
+                        </span>
                         <span>
                           Updated: {new Date(form.updatedAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="outline"
+                        size="small"
+                        icon={BarChart3}
+                        onClick={() => onViewSubmissions(form)}
+                        disabled={!form.fields || form.fields.length === 0}
+                      >
+                        Submissions
+                      </Button>
                       <Button
                         variant="outline"
                         size="small"
@@ -166,8 +183,28 @@ const AdminDashboard = ({ onCreateForm, onSelectForm, onEditForm }) => {
   );
 };
 
+// Submissions Wrapper Component
+const SubmissionsWrapper = ({ form, onBack }) => {
+  return (
+    <SubmissionsProvider 
+      formId={form.id} 
+      userRole="admin"
+      options={{ 
+        pageSize: 10,
+        realTime: false 
+      }}
+    >
+      <SubmissionDashboard
+        formId={form.id}
+        formTitle={form.title}
+        onBack={onBack}
+      />
+    </SubmissionsProvider>
+  );
+};
+
 const App = () => {
-  const [currentView, setCurrentView] = useState('dashboard'); // dashboard | builder | renderer
+  const [currentView, setCurrentView] = useState('dashboard'); // dashboard | builder | renderer | submissions
   const [selectedForm, setSelectedForm] = useState(null);
   const [userRole, setUserRole] = useState('admin'); // admin | user
 
@@ -194,6 +231,11 @@ const App = () => {
   const handleFormSelect = (form) => {
     setSelectedForm(form);
     setCurrentView('renderer');
+  };
+
+  const handleViewSubmissions = (form) => {
+    setSelectedForm(form);
+    setCurrentView('submissions');
   };
 
   const handleFormSubmission = (submissionData, result) => {
@@ -252,6 +294,20 @@ const App = () => {
                   <Plus className="w-4 h-4" />
                   Form Builder
                 </button>
+
+                {selectedForm && (
+                  <button
+                    onClick={() => handleViewSubmissions(selectedForm)}
+                    className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                      currentView === 'submissions'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Submissions
+                  </button>
+                )}
               </>
             )}
 
@@ -285,6 +341,7 @@ const App = () => {
         setSelectedForm(form);
         setCurrentView('builder');
       }}
+      onViewSubmissions={handleViewSubmissions}
     />
   );
 
@@ -335,6 +392,37 @@ const App = () => {
     />
   );
 
+  const renderSubmissions = () => {
+    if (!selectedForm) {
+      return (
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="bg-white rounded-lg shadow border p-8 text-center">
+            <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-500 mb-2">
+              No Form Selected
+            </h3>
+            <p className="text-gray-400 mb-4">
+              Please select a form to view its submissions.
+            </p>
+            <Button
+              variant="primary"
+              onClick={() => setCurrentView('dashboard')}
+            >
+              Go to Dashboard
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <SubmissionsWrapper 
+        form={selectedForm}
+        onBack={() => setCurrentView('dashboard')}
+      />
+    );
+  };
+
   return (
     <FormBuilderProvider 
       firebaseApp={firebaseApp}
@@ -349,6 +437,7 @@ const App = () => {
               {currentView === 'dashboard' && renderAdminDashboard()}
               {currentView === 'builder' && renderFormBuilder()}
               {currentView === 'renderer' && renderUserView()}
+              {currentView === 'submissions' && renderSubmissions()}
             </>
           ) : (
             renderUserView()
@@ -362,7 +451,7 @@ const App = () => {
               <p>
                 Form Builder Module - Phase 1 Complete ✅
                 <br />
-                Firebase Integration • Configurable Provider • Real-time Updates
+                Firebase Integration • Configurable Provider • Real-time Updates • Submission Management
               </p>
             </div>
           </div>
