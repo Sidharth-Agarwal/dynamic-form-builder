@@ -1,4 +1,3 @@
-// config/firebaseConfig.js - External Firebase Configuration
 import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
