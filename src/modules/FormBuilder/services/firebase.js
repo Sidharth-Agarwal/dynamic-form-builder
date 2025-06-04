@@ -1,4 +1,4 @@
-// services/firebase.js - Enhanced Firebase Service with Better Error Handling
+// services/firebase.js - Updated Firebase Service with Better Error Handling
 import { 
   collection, 
   addDoc, 
@@ -32,7 +32,7 @@ export const saveFormToFirestore = async (db, formData) => {
   try {
     const docRef = await addDoc(collection(db, FIRESTORE_COLLECTIONS.FORMS), {
       ...formData,
-      submissionCount: 0, // Initialize submission count
+      submissionCount: 0,
       lastSubmission: null,
       status: 'active',
       createdAt: serverTimestamp(),
@@ -50,16 +50,17 @@ export const saveFormToFirestore = async (db, formData) => {
 
 export const getFormsFromFirestore = async (db, userId = null) => {
   try {
-    let q = query(
-      collection(db, FIRESTORE_COLLECTIONS.FORMS),
-      orderBy('updatedAt', 'desc')
-    );
+    let q;
     
-    // Only filter by userId if provided and not null
     if (userId && userId !== 'anonymous') {
       q = query(
         collection(db, FIRESTORE_COLLECTIONS.FORMS),
         where('createdBy', '==', userId),
+        orderBy('updatedAt', 'desc')
+      );
+    } else {
+      q = query(
+        collection(db, FIRESTORE_COLLECTIONS.FORMS),
         orderBy('updatedAt', 'desc')
       );
     }
@@ -105,13 +106,10 @@ export const updateFormInFirestore = async (db, formId, updates) => {
 
 export const deleteFormFromFirestore = async (db, formId) => {
   try {
-    // Use transaction to delete form and all its submissions
     await runTransaction(db, async (transaction) => {
-      // Delete form
       const formRef = doc(db, FIRESTORE_COLLECTIONS.FORMS, formId);
       transaction.delete(formRef);
       
-      // Get and delete all submissions for this form
       try {
         const submissionsQuery = query(
           collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
@@ -123,8 +121,7 @@ export const deleteFormFromFirestore = async (db, formId) => {
           transaction.delete(doc.ref);
         });
       } catch (submissionError) {
-        console.warn('Could not delete submissions (index may not exist yet):', submissionError.message);
-        // Continue with form deletion even if submission deletion fails
+        console.warn('Could not delete submissions:', submissionError.message);
       }
     });
     
@@ -161,6 +158,8 @@ export const getFormFromFirestore = async (db, formId) => {
 
 export const saveSubmissionToFirestore = async (db, submissionData) => {
   try {
+    console.log('Saving submission to Firestore:', submissionData);
+    
     const docRef = await addDoc(collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS), {
       ...submissionData,
       submittedAt: serverTimestamp(),
@@ -172,12 +171,13 @@ export const saveSubmissionToFirestore = async (db, submissionData) => {
       }
     });
     
-    // Update form's submission count and last submission time
+    console.log('Submission saved to Firestore with ID:', docRef.id);
+    
+    // Update form's submission count
     if (submissionData.formId) {
-      await updateFormSubmissionStatsWithFallback(db, submissionData.formId);
+      await updateFormSubmissionStats(db, submissionData.formId);
     }
     
-    console.log('Submission saved to Firestore with ID:', docRef.id);
     return { id: docRef.id, ...submissionData };
   } catch (error) {
     console.error('Error saving submission:', error);
@@ -187,6 +187,8 @@ export const saveSubmissionToFirestore = async (db, submissionData) => {
 
 export const getSubmissionsFromFirestore = async (db, formId, options = {}) => {
   try {
+    console.log('Fetching submissions for form:', formId, 'with options:', options);
+    
     const {
       limitCount = null,
       orderByField = 'submittedAt',
@@ -195,48 +197,53 @@ export const getSubmissionsFromFirestore = async (db, formId, options = {}) => {
       status = null
     } = options;
 
-    // Try complex query first, fallback to simple query if index doesn't exist
-    try {
-      let q = query(
-        collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
-        where('formId', '==', formId),
-        orderBy(orderByField, orderDirection)
-      );
-      
-      // Add status filter if specified
-      if (status && status !== 'all') {
-        q = query(q, where('status', '==', status));
-      }
-      
-      // Add pagination
-      if (limitCount) {
-        q = query(q, limit(limitCount));
-      }
-      
-      if (startAfterDoc) {
-        q = query(q, startAfter(startAfterDoc));
-      }
-      
-      const querySnapshot = await getDocs(q);
-      const submissions = [];
-      
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        submissions.push({
-          id: doc.id,
-          ...data,
-          submittedAt: data.submittedAt?.toDate?.() || new Date()
-        });
+    // Build query step by step
+    let q = collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS);
+    
+    // Add where clause for formId
+    q = query(q, where('formId', '==', formId));
+    
+    // Add status filter if specified
+    if (status && status !== 'all') {
+      q = query(q, where('status', '==', status));
+    }
+    
+    // Add ordering
+    q = query(q, orderBy(orderByField, orderDirection));
+    
+    // Add pagination
+    if (limitCount) {
+      q = query(q, limit(limitCount));
+    }
+    
+    if (startAfterDoc) {
+      q = query(q, startAfter(startAfterDoc));
+    }
+    
+    console.log('Executing Firestore query...');
+    const querySnapshot = await getDocs(q);
+    const submissions = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      submissions.push({
+        id: doc.id,
+        ...data,
+        submittedAt: data.submittedAt?.toDate?.() || new Date()
       });
+    });
+    
+    console.log(`Successfully fetched ${submissions.length} submissions for form ${formId}`);
+    return submissions;
+    
+  } catch (error) {
+    console.error('Error fetching submissions:', error);
+    
+    // If it's an index error, try a simpler query
+    if (error.code === 'failed-precondition' || error.message.includes('index')) {
+      console.warn('Index not available, trying simple query...');
       
-      console.log(`Fetched ${submissions.length} submissions for form ${formId}`);
-      return submissions;
-      
-    } catch (indexError) {
-      if (indexError.code === 'failed-precondition' || indexError.message.includes('index')) {
-        console.warn('Composite index not available, using simple query:', indexError.message);
-        
-        // Fallback to simple query without ordering
+      try {
         const simpleQuery = query(
           collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
           where('formId', '==', formId)
@@ -258,29 +265,30 @@ export const getSubmissionsFromFirestore = async (db, formId, options = {}) => {
         submissions.sort((a, b) => {
           const dateA = new Date(a.submittedAt);
           const dateB = new Date(b.submittedAt);
-          return orderDirection === 'desc' ? dateB - dateA : dateA - dateB;
+          return options.orderDirection === 'desc' ? dateB - dateA : dateA - dateB;
         });
         
         // Apply status filter in memory if needed
         let filteredSubmissions = submissions;
-        if (status && status !== 'all') {
-          filteredSubmissions = submissions.filter(s => s.status === status);
+        if (options.status && options.status !== 'all') {
+          filteredSubmissions = submissions.filter(s => s.status === options.status);
         }
         
         // Apply limit in memory if needed
-        if (limitCount) {
-          filteredSubmissions = filteredSubmissions.slice(0, limitCount);
+        if (options.limitCount) {
+          filteredSubmissions = filteredSubmissions.slice(0, options.limitCount);
         }
         
-        console.log(`Fetched ${filteredSubmissions.length} submissions for form ${formId} (using fallback query)`);
+        console.log(`Fetched ${filteredSubmissions.length} submissions using fallback query`);
         return filteredSubmissions;
-      } else {
-        throw indexError;
+        
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        throw new Error(`Failed to fetch submissions: ${fallbackError.message}`);
       }
+    } else {
+      throw new Error(`Failed to fetch submissions: ${error.message}`);
     }
-  } catch (error) {
-    console.error('Error fetching submissions:', error);
-    throw new Error(`Failed to fetch submissions: ${error.message}`);
   }
 };
 
@@ -302,16 +310,13 @@ export const updateSubmissionInFirestore = async (db, submissionId, updates) => 
 
 export const deleteSubmissionFromFirestore = async (db, submissionId) => {
   try {
-    // Get submission to know which form to update
     const submissionDoc = await getDoc(doc(db, FIRESTORE_COLLECTIONS.SUBMISSIONS, submissionId));
     const submissionData = submissionDoc.data();
     
-    // Delete submission
     await deleteDoc(doc(db, FIRESTORE_COLLECTIONS.SUBMISSIONS, submissionId));
     
-    // Update form's submission count
     if (submissionData?.formId) {
-      await updateFormSubmissionStatsWithFallback(db, submissionData.formId);
+      await updateFormSubmissionStats(db, submissionData.formId);
     }
     
     console.log('Submission deleted from Firestore:', submissionId);
@@ -341,7 +346,7 @@ export const getSubmissionFromFirestore = async (db, submissionId) => {
   }
 };
 
-// ===== ANALYTICS OPERATIONS (with fallback) =====
+// ===== ANALYTICS OPERATIONS =====
 
 export const getSubmissionCount = async (db, formId, status = null) => {
   try {
@@ -354,22 +359,22 @@ export const getSubmissionCount = async (db, formId, status = null) => {
       q = query(q, where('status', '==', status));
     }
     
-    const snapshot = await getCountFromServer(q);
-    return snapshot.data().count;
-  } catch (error) {
-    console.warn('Count query failed, falling back to document fetch:', error.message);
-    // Fallback: get all documents and count them
     try {
+      const snapshot = await getCountFromServer(q);
+      return snapshot.data().count;
+    } catch (countError) {
+      console.warn('Count query failed, using document fetch fallback:', countError.message);
+      
       const submissions = await getSubmissionsFromFirestore(db, formId);
       let count = submissions.length;
       if (status) {
         count = submissions.filter(s => s.status === status).length;
       }
       return count;
-    } catch (fallbackError) {
-      console.error('Fallback count also failed:', fallbackError);
-      return 0;
     }
+  } catch (error) {
+    console.error('Error getting submission count:', error);
+    return 0;
   }
 };
 
@@ -411,7 +416,7 @@ export const getFormAnalytics = async (db, formId) => {
 
 // ===== HELPER FUNCTIONS =====
 
-const updateFormSubmissionStatsWithFallback = async (db, formId) => {
+const updateFormSubmissionStats = async (db, formId) => {
   try {
     const count = await getSubmissionCount(db, formId);
     const analytics = await getFormAnalytics(db, formId);
@@ -422,23 +427,24 @@ const updateFormSubmissionStatsWithFallback = async (db, formId) => {
     });
   } catch (error) {
     console.warn('Could not update form submission stats:', error.message);
-    // Don't throw here as this is a background operation
   }
 };
 
-// ===== REAL-TIME LISTENERS (with fallback) =====
+// ===== REAL-TIME LISTENERS =====
 
 export const subscribeToForms = (db, callback, userId = null) => {
   try {
-    let q = query(
-      collection(db, FIRESTORE_COLLECTIONS.FORMS),
-      orderBy('updatedAt', 'desc')
-    );
+    let q;
     
     if (userId && userId !== 'anonymous') {
       q = query(
         collection(db, FIRESTORE_COLLECTIONS.FORMS),
         where('createdBy', '==', userId),
+        orderBy('updatedAt', 'desc')
+      );
+    } else {
+      q = query(
+        collection(db, FIRESTORE_COLLECTIONS.FORMS),
         orderBy('updatedAt', 'desc')
       );
     }
@@ -467,117 +473,87 @@ export const subscribeToForms = (db, callback, userId = null) => {
 
 export const subscribeToSubmissions = (db, formId, callback, options = {}) => {
   try {
+    console.log('Setting up real-time subscription for form:', formId);
+    
     const { status = null, limitCount = null } = options;
     
-    // Try complex query first, fallback if needed
-    try {
-      let q = query(
-        collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
-        where('formId', '==', formId),
-        orderBy('submittedAt', 'desc')
-      );
-      
-      if (status && status !== 'all') {
-        q = query(q, where('status', '==', status));
-      }
-      
-      if (limitCount) {
-        q = query(q, limit(limitCount));
-      }
-      
-      return onSnapshot(q, (snapshot) => {
-        const submissions = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            submittedAt: data.submittedAt?.toDate?.() || new Date()
-          };
-        });
-        callback(submissions);
-      }, (error) => {
-        if (error.code === 'failed-precondition' || error.message.includes('index')) {
-          console.warn('Index not available for real-time submissions, using simple subscription');
-          
-          // Fallback to simple subscription
-          const simpleQuery = query(
-            collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
-            where('formId', '==', formId)
-          );
-          
-          return onSnapshot(simpleQuery, (snapshot) => {
-            let submissions = snapshot.docs.map(doc => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                ...data,
-                submittedAt: data.submittedAt?.toDate?.() || new Date()
-              };
-            });
-            
-            // Sort and filter in memory
-            submissions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-            
-            if (status && status !== 'all') {
-              submissions = submissions.filter(s => s.status === status);
-            }
-            
-            if (limitCount) {
-              submissions = submissions.slice(0, limitCount);
-            }
-            
-            callback(submissions);
-          });
-        } else {
-          console.error('Error in submissions subscription:', error);
-        }
-      });
-      
-    } catch (setupError) {
-      console.error('Could not set up complex subscription, using simple version:', setupError);
-      
-      // Simple subscription fallback
-      const simpleQuery = query(
-        collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
-        where('formId', '==', formId)
-      );
-      
-      return onSnapshot(simpleQuery, (snapshot) => {
-        let submissions = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            submittedAt: data.submittedAt?.toDate?.() || new Date()
-          };
-        });
-        
-        // Sort and filter in memory
-        submissions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-        
-        if (status && status !== 'all') {
-          submissions = submissions.filter(s => s.status === status);
-        }
-        
-        if (limitCount) {
-          submissions = submissions.slice(0, limitCount);
-        }
-        
-        callback(submissions);
-      });
+    // Build query
+    let q = query(
+      collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
+      where('formId', '==', formId),
+      orderBy('submittedAt', 'desc')
+    );
+    
+    if (status && status !== 'all') {
+      q = query(q, where('status', '==', status));
     }
+    
+    if (limitCount) {
+      q = query(q, limit(limitCount));
+    }
+    
+    return onSnapshot(q, (snapshot) => {
+      const submissions = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          submittedAt: data.submittedAt?.toDate?.() || new Date()
+        };
+      });
+      
+      console.log(`Real-time update: ${submissions.length} submissions for form ${formId}`);
+      callback(submissions);
+    }, (error) => {
+      console.error('Error in submissions subscription:', error);
+      
+      // If index error, set up simple subscription
+      if (error.code === 'failed-precondition' || error.message.includes('index')) {
+        console.warn('Index not available for real-time submissions, using simple subscription');
+        
+        const simpleQuery = query(
+          collection(db, FIRESTORE_COLLECTIONS.SUBMISSIONS),
+          where('formId', '==', formId)
+        );
+        
+        return onSnapshot(simpleQuery, (snapshot) => {
+          let submissions = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              submittedAt: data.submittedAt?.toDate?.() || new Date()
+            };
+          });
+          
+          // Sort and filter in memory
+          submissions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+          
+          if (status && status !== 'all') {
+            submissions = submissions.filter(s => s.status === status);
+          }
+          
+          if (limitCount) {
+            submissions = submissions.slice(0, limitCount);
+          }
+          
+          console.log(`Real-time update (fallback): ${submissions.length} submissions for form ${formId}`);
+          callback(submissions);
+        });
+      }
+    });
+    
   } catch (error) {
     console.error('Error setting up submissions subscription:', error);
     throw error;
   }
 };
 
-// ===== REST OF THE ORIGINAL FUNCTIONS =====
-// (Keep all the other functions like bulkDeleteSubmissions, uploadFileToStorage, etc. unchanged)
+// ===== BULK OPERATIONS =====
 
 export const bulkDeleteSubmissions = async (db, submissionIds) => {
   try {
-    const batchSize = 500; // Firestore batch limit
+    const batchSize = 500;
     const batches = [];
     
     for (let i = 0; i < submissionIds.length; i += batchSize) {
@@ -631,7 +607,8 @@ export const bulkUpdateSubmissions = async (db, updates) => {
   }
 };
 
-// File operations remain the same
+// ===== FILE OPERATIONS =====
+
 export const uploadFileToStorage = async (storage, file, path) => {
   try {
     const timestamp = Date.now();
@@ -668,7 +645,8 @@ export const deleteFileFromStorage = async (storage, filePath) => {
   }
 };
 
-// Legacy functions for backward compatibility remain the same
+// ===== LEGACY FUNCTIONS (for backward compatibility) =====
+
 export const saveForm = async (formData) => {
   console.warn('saveForm is deprecated. Use saveFormToFirestore with Firebase context.');
   return Promise.resolve({ id: `form_${Date.now()}`, ...formData });

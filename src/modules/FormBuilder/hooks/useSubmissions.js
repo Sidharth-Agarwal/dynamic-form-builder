@@ -1,4 +1,4 @@
-// hooks/useSubmissions.js - Submissions Management Hook
+// hooks/useSubmissions.js - Updated with Better Error Handling
 import { useState, useEffect, useCallback } from 'react';
 import { useFirebase } from '../context/FormBuilderProvider';
 import {
@@ -29,13 +29,19 @@ export const useSubmissions = (formId = null, options = {}) => {
 
   // Load submissions from Firestore
   const loadSubmissions = useCallback(async (targetFormId = formId, force = false) => {
-    if (!db || !targetFormId) return;
+    if (!db || !targetFormId) {
+      console.log('No database or formId provided for loadSubmissions');
+      return;
+    }
 
     try {
+      console.log('Loading submissions for form:', targetFormId);
       setLoading(LOADING_STATES.LOADING);
       setError(null);
       
       const fetchedSubmissions = await getSubmissionsFromFirestore(db, targetFormId);
+      console.log('Successfully loaded submissions:', fetchedSubmissions.length);
+      
       setSubmissions(fetchedSubmissions);
       setLastUpdated(new Date());
       setLoading(LOADING_STATES.SUCCESS);
@@ -45,7 +51,8 @@ export const useSubmissions = (formId = null, options = {}) => {
       console.error('Error loading submissions:', err);
       setError({
         code: ERROR_CODES.DATABASE_ERROR,
-        message: err.message || 'Failed to load submissions'
+        message: err.message || 'Failed to load submissions',
+        details: err
       });
       setLoading(LOADING_STATES.ERROR);
       setIsOnline(false);
@@ -54,35 +61,53 @@ export const useSubmissions = (formId = null, options = {}) => {
 
   // Set up real-time listener
   useEffect(() => {
-    if (!db || !formId || !realTimeEnabled) return;
+    if (!db || !formId || !realTimeEnabled) {
+      console.log('Real-time listener not set up:', { db: !!db, formId, realTimeEnabled });
+      return;
+    }
 
     let unsubscribe;
     
     try {
+      console.log('Setting up real-time listener for form:', formId);
+      
       unsubscribe = subscribeToSubmissions(db, formId, (updatedSubmissions) => {
+        console.log('Real-time update received:', updatedSubmissions.length, 'submissions');
         setSubmissions(updatedSubmissions);
         setLastUpdated(new Date());
         setLoading(LOADING_STATES.SUCCESS);
         setIsOnline(true);
         setError(null);
       });
+      
+      console.log('Real-time listener set up successfully');
+      
     } catch (err) {
       console.error('Error setting up real-time listener:', err);
+      setError({
+        code: ERROR_CODES.DATABASE_ERROR,
+        message: 'Failed to set up real-time updates',
+        details: err
+      });
       setIsOnline(false);
-      // Fallback to polling
+      
+      // Fallback to manual loading
+      console.log('Falling back to manual loading');
       loadSubmissions();
     }
 
     return () => {
       if (unsubscribe) {
+        console.log('Cleaning up real-time listener');
         unsubscribe();
       }
     };
   }, [db, formId, realTimeEnabled, loadSubmissions]);
 
-  // Initial load
+  // Initial load when not using real-time
   useEffect(() => {
     if (formId && !realTimeEnabled) {
+      console.log('Initial load (no real-time) for form:', formId);
       loadSubmissions();
     }
   }, [formId, realTimeEnabled, loadSubmissions]);
@@ -95,6 +120,7 @@ export const useSubmissions = (formId = null, options = {}) => {
 
     try {
       setError(null);
+      console.log('Adding new submission:', submissionData);
       
       const newSubmission = await saveSubmissionToFirestore(db, {
         ...submissionData,
@@ -103,11 +129,12 @@ export const useSubmissions = (formId = null, options = {}) => {
         submittedAt: new Date().toISOString()
       });
 
-      // Update local state immediately for better UX
+      // Update local state immediately for better UX if not using real-time
       if (!realTimeEnabled) {
         setSubmissions(prev => [newSubmission, ...prev]);
       }
 
+      console.log('Successfully added submission:', newSubmission.id);
       return newSubmission;
     } catch (err) {
       console.error('Error adding submission:', err);
@@ -127,13 +154,14 @@ export const useSubmissions = (formId = null, options = {}) => {
 
     try {
       setError(null);
+      console.log('Updating submission:', submissionId, updates);
       
       const updatedSubmission = await updateSubmissionInFirestore(db, submissionId, {
         ...updates,
         updatedAt: new Date().toISOString()
       });
 
-      // Update local state immediately for better UX
+      // Update local state immediately for better UX if not using real-time
       if (!realTimeEnabled) {
         setSubmissions(prev => prev.map(submission =>
           submission.id === submissionId 
@@ -142,6 +170,7 @@ export const useSubmissions = (formId = null, options = {}) => {
         ));
       }
 
+      console.log('Successfully updated submission:', submissionId);
       return updatedSubmission;
     } catch (err) {
       console.error('Error updating submission:', err);
@@ -161,14 +190,16 @@ export const useSubmissions = (formId = null, options = {}) => {
 
     try {
       setError(null);
+      console.log('Deleting submission:', submissionId);
       
       await deleteSubmissionFromFirestore(db, submissionId);
 
-      // Update local state immediately for better UX
+      // Update local state immediately for better UX if not using real-time
       if (!realTimeEnabled) {
         setSubmissions(prev => prev.filter(submission => submission.id !== submissionId));
       }
 
+      console.log('Successfully deleted submission:', submissionId);
       return submissionId;
     } catch (err) {
       console.error('Error deleting submission:', err);
@@ -188,15 +219,18 @@ export const useSubmissions = (formId = null, options = {}) => {
 
     try {
       setError(null);
+      console.log('Bulk deleting submissions:', submissionIds.length);
       
+      // For now, delete one by one (can be optimized with batch operations)
       const deletePromises = submissionIds.map(id => deleteSubmissionFromFirestore(db, id));
       await Promise.all(deletePromises);
 
-      // Update local state immediately for better UX
+      // Update local state immediately for better UX if not using real-time
       if (!realTimeEnabled) {
         setSubmissions(prev => prev.filter(submission => !submissionIds.includes(submission.id)));
       }
 
+      console.log('Successfully bulk deleted submissions:', submissionIds.length);
       return submissionIds;
     } catch (err) {
       console.error('Error bulk deleting submissions:', err);
@@ -237,6 +271,7 @@ export const useSubmissions = (formId = null, options = {}) => {
 
   // Refresh submissions
   const refreshSubmissions = useCallback(async () => {
+    console.log('Manually refreshing submissions');
     setLoading(LOADING_STATES.REFRESHING);
     await loadSubmissions(formId, true);
   }, [loadSubmissions, formId]);
@@ -248,6 +283,7 @@ export const useSubmissions = (formId = null, options = {}) => {
 
   // Toggle real-time updates
   const toggleRealTime = useCallback((enabled) => {
+    console.log('Toggling real-time updates:', enabled);
     setRealTimeEnabled(enabled);
   }, []);
 
@@ -277,6 +313,19 @@ export const useSubmissions = (formId = null, options = {}) => {
       lastUpdated
     };
   }, [submissions, lastUpdated]);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('useSubmissions state update:', {
+      formId,
+      submissionsCount: submissions.length,
+      loading,
+      error: error?.message,
+      isOnline,
+      realTimeEnabled,
+      lastUpdated
+    });
+  }, [formId, submissions.length, loading, error, isOnline, realTimeEnabled, lastUpdated]);
 
   // Check if submissions are loaded
   const isLoaded = loading === LOADING_STATES.SUCCESS || loading === LOADING_STATES.IDLE;
