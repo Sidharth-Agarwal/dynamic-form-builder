@@ -1,4 +1,3 @@
-// utils/fieldTypes.js - Enhanced with 10 Field Types
 import { 
   Type, 
   Mail, 

@@ -1,10 +1,10 @@
-// components/Renderer/FormRenderer.jsx
 import React, { useState } from 'react';
 import { CheckCircle, AlertCircle, Send } from 'lucide-react';
 import FieldRenderer from './FieldRenderer';
 import Button from '../Common/Button';
 import { useValidation } from '../../hooks/useValidation';
-import { saveSubmission } from '../../services/firebase';
+import { useFirebase } from '../../context/FormBuilderProvider';
+import { saveSubmissionToFirestore } from '../../services/submissions';
 
 const FormRenderer = ({ 
   form, 
@@ -15,6 +15,7 @@ const FormRenderer = ({
   successMessage = 'Form submitted successfully!',
   disabled = false
 }) => {
+  const { db } = useFirebase();
   const [formData, setFormData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -68,19 +69,28 @@ const FormRenderer = ({
     try {
       setIsSubmitting(true);
 
+      // Check if Firebase DB is available
+      if (!db) {
+        throw new Error('Database connection not available. Please check your Firebase configuration.');
+      }
+
       // Prepare submission data
       const submissionData = {
         formId: form.id || 'local_form',
         formTitle: form.title,
         data: formData,
-        submittedAt: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        timestamp: Date.now()
+        submittedBy: 'anonymous',
+        userAgent: navigator?.userAgent || 'unknown',
+        source: 'web'
       };
 
-      // Save to Firebase (Phase 1: logs to console)
-      const result = await saveSubmission(submissionData);
+      console.log('🚀 Submitting to Firebase:', submissionData);
+
+      // Save to Firebase using the correct function
+      const result = await saveSubmissionToFirestore(db, submissionData);
       
+      console.log('✅ Firebase submission successful:', result);
+
       // Call external onSubmit if provided
       if (onSubmit) {
         await onSubmit(submissionData, result);
@@ -88,15 +98,15 @@ const FormRenderer = ({
 
       setIsSubmitted(true);
       
-      // Reset form after 3 seconds (optional)
+      // Reset form after 5 seconds (optional)
       setTimeout(() => {
         setIsSubmitted(false);
         setFormData({});
-      }, 3000);
+      }, 5000);
 
     } catch (error) {
-      console.error('Form submission error:', error);
-      setSubmitError('Failed to submit form. Please try again.');
+      console.error('❌ Form submission error:', error);
+      setSubmitError(`Failed to submit form: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -109,7 +119,16 @@ const FormRenderer = ({
         <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
           <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-green-900 mb-2">Success!</h3>
-          <p className="text-green-700">{successMessage}</p>
+          <p className="text-green-700 mb-4">{successMessage}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setIsSubmitted(false);
+              setFormData({});
+            }}
+          >
+            Submit Another Response
+          </Button>
         </div>
       </div>
     );
@@ -129,6 +148,16 @@ const FormRenderer = ({
                 {form.description}
               </p>
             )}
+          </div>
+        )}
+
+        {/* Firebase Connection Status */}
+        {!db && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
+            <AlertCircle className="w-5 h-5 text-red-600 mr-3" />
+            <p className="text-red-700">
+              Database connection not available. Form submissions will not be saved.
+            </p>
           </div>
         )}
 
@@ -153,7 +182,10 @@ const FormRenderer = ({
         {submitError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
             <AlertCircle className="w-5 h-5 text-red-600 mr-3" />
-            <p className="text-red-700">{submitError}</p>
+            <div>
+              <p className="text-red-700 font-medium">Submission Failed</p>
+              <p className="text-red-600 text-sm mt-1">{submitError}</p>
+            </div>
           </div>
         )}
 
@@ -179,7 +211,7 @@ const FormRenderer = ({
             variant="primary"
             size="large"
             loading={isSubmitting}
-            disabled={disabled || form.fields.length === 0}
+            disabled={disabled || form.fields.length === 0 || !db}
             icon={Send}
             className="min-w-[200px]"
           >
@@ -190,6 +222,9 @@ const FormRenderer = ({
         {/* Form Info */}
         <div className="text-center text-sm text-gray-500 pt-4">
           <p>Fields marked with * are required</p>
+          {db && (
+            <p className="mt-1 text-green-600">✅ Connected to Firebase</p>
+          )}
         </div>
       </form>
     </div>

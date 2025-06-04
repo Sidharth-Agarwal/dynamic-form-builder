@@ -1,5 +1,3 @@
-// utils/dragDropUtils.js - Drag and Drop Utility Functions
-
 // Reorder array items based on drag and drop
 export const reorderFields = (fields, activeId, overId) => {
   const oldIndex = fields.findIndex(field => field.id === activeId);

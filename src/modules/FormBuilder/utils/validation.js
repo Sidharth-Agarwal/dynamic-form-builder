@@ -1,5 +1,3 @@
-// utils/validation.js - Enhanced Validation System
-
 // Basic validation functions
 export const validateField = (value, field) => {
   const errors = [];
