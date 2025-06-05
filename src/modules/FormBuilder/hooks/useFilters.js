@@ -5,8 +5,6 @@ import { filterSubmissions } from '../utils/submissionUtils';
 
 export const useFilters = (initialFilters = {}) => {
   const [filters, setFilters] = useState({
-    status: 'all',
-    flags: [],
     dateRange: null,
     searchTerm: '',
     formId: null,
@@ -34,50 +32,11 @@ export const useFilters = (initialFilters = {}) => {
   // Clear all filters
   const clearFilters = useCallback(() => {
     setFilters({
-      status: 'all',
-      flags: [],
       dateRange: null,
       searchTerm: '',
       formId: filters.formId // Preserve form ID if it was set initially
     });
   }, [filters.formId]);
-
-  // Status filter methods
-  const setStatusFilter = useCallback((status) => {
-    updateFilter('status', status);
-  }, [updateFilter]);
-
-  const clearStatusFilter = useCallback(() => {
-    updateFilter('status', 'all');
-  }, [updateFilter]);
-
-  // Flag filter methods
-  const addFlag = useCallback((flag) => {
-    setFilters(prev => ({
-      ...prev,
-      flags: [...prev.flags.filter(f => f !== flag), flag]
-    }));
-  }, []);
-
-  const removeFlag = useCallback((flag) => {
-    setFilters(prev => ({
-      ...prev,
-      flags: prev.flags.filter(f => f !== flag)
-    }));
-  }, []);
-
-  const toggleFlag = useCallback((flag) => {
-    setFilters(prev => ({
-      ...prev,
-      flags: prev.flags.includes(flag)
-        ? prev.flags.filter(f => f !== flag)
-        : [...prev.flags, flag]
-    }));
-  }, []);
-
-  const clearFlags = useCallback(() => {
-    updateFilter('flags', []);
-  }, [updateFilter]);
 
   // Date range filter methods
   const setDateRangeFilter = useCallback((rangeType, customRange = null) => {
@@ -130,39 +89,27 @@ export const useFilters = (initialFilters = {}) => {
     updateFilter('formId', formId);
   }, [updateFilter]);
 
-  // Check if filters are active
+  // Check if filters are active (simplified - no status/flags)
   const hasActiveFilters = useMemo(() => {
     return (
-      filters.status !== 'all' ||
-      filters.flags.length > 0 ||
       filters.dateRange !== null ||
       filters.searchTerm.trim() !== ''
     );
   }, [filters]);
 
-  // Get active filter count
+  // Get active filter count (simplified - no status/flags)
   const activeFilterCount = useMemo(() => {
     let count = 0;
     
-    if (filters.status !== 'all') count++;
-    if (filters.flags.length > 0) count++;
     if (filters.dateRange !== null) count++;
     if (filters.searchTerm.trim() !== '') count++;
     
     return count;
   }, [filters]);
 
-  // Get filter summary
+  // Get filter summary (simplified - no status/flags)
   const getFilterSummary = useCallback(() => {
     const summary = [];
-    
-    if (filters.status !== 'all') {
-      summary.push(`Status: ${filters.status}`);
-    }
-    
-    if (filters.flags.length > 0) {
-      summary.push(`Flags: ${filters.flags.join(', ')}`);
-    }
     
     if (filters.dateRange) {
       if (filters.dateRange.type === 'custom') {
@@ -184,25 +131,6 @@ export const useFilters = (initialFilters = {}) => {
     return filterSubmissions(submissions, filters);
   }, [filters]);
 
-  // Get available status options
-  const getStatusOptions = useCallback(() => {
-    return [
-      { value: 'all', label: 'All Status' },
-      ...Object.entries(SUBMISSION_CONSTANTS.STATUSES).map(([key, value]) => ({
-        value,
-        label: key.charAt(0) + key.slice(1).toLowerCase()
-      }))
-    ];
-  }, []);
-
-  // Get available flag options
-  const getFlagOptions = useCallback(() => {
-    return Object.entries(SUBMISSION_CONSTANTS.FLAGS).map(([key, value]) => ({
-      value,
-      label: key.charAt(0) + key.slice(1).toLowerCase().replace('_', ' ')
-    }));
-  }, []);
-
   // Get date range options
   const getDateRangeOptions = useCallback(() => {
     return [
@@ -216,25 +144,9 @@ export const useFilters = (initialFilters = {}) => {
     ];
   }, []);
 
-  // Preset filter combinations
+  // Simplified preset filter combinations (removed status/flag presets)
   const applyPresetFilter = useCallback((presetName) => {
     switch (presetName) {
-      case 'new':
-        updateFilters({
-          status: SUBMISSION_CONSTANTS.STATUSES.NEW,
-          flags: [],
-          dateRange: null
-        });
-        break;
-        
-      case 'flagged':
-        updateFilters({
-          status: 'all',
-          flags: [SUBMISSION_CONSTANTS.FLAGS.IMPORTANT],
-          dateRange: null
-        });
-        break;
-        
       case 'recent':
         setDateRangeFilter(SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_7_DAYS);
         break;
@@ -243,18 +155,14 @@ export const useFilters = (initialFilters = {}) => {
         setDateRangeFilter(SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.TODAY);
         break;
         
-      case 'unreviewed':
-        updateFilters({
-          status: SUBMISSION_CONSTANTS.STATUSES.NEW,
-          flags: [],
-          dateRange: null
-        });
+      case 'this_month':
+        setDateRangeFilter(SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_30_DAYS);
         break;
         
       default:
         clearFilters();
     }
-  }, [updateFilters, setDateRangeFilter, clearFilters]);
+  }, [setDateRangeFilter, clearFilters]);
 
   // Save current filters as preset
   const saveAsPreset = useCallback((name) => {
@@ -291,8 +199,6 @@ export const useFilters = (initialFilters = {}) => {
   // Import filters
   const importFilters = useCallback((importedFilters) => {
     setFilters({
-      status: 'all',
-      flags: [],
       dateRange: null,
       searchTerm: '',
       formId: filters.formId,
@@ -308,16 +214,6 @@ export const useFilters = (initialFilters = {}) => {
     updateFilter,
     updateFilters,
     clearFilters,
-    
-    // Status methods
-    setStatusFilter,
-    clearStatusFilter,
-    
-    // Flag methods
-    addFlag,
-    removeFlag,
-    toggleFlag,
-    clearFlags,
     
     // Date range methods
     setDateRangeFilter,
@@ -341,8 +237,6 @@ export const useFilters = (initialFilters = {}) => {
     applyFilters,
     
     // Options
-    getStatusOptions,
-    getFlagOptions,
     getDateRangeOptions,
     
     // Presets

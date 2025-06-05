@@ -2,7 +2,7 @@ import { SUBMISSION_CONSTANTS } from './constants';
 import { formatDate } from './dateUtils';
 import { formatFieldValue } from './submissionUtils';
 
-// Generate CSV content from submissions data
+// Generate CSV content from submissions data (simplified - no status/flags)
 export const generateCSV = (submissions, formFields = [], options = {}) => {
   if (!submissions || submissions.length === 0) {
     return '';
@@ -21,7 +21,7 @@ export const generateCSV = (submissions, formFields = [], options = {}) => {
     return map;
   }, {});
 
-  // Define headers
+  // Define headers (simplified - no status/flags)
   const headers = [];
   
   // Basic submission headers
@@ -30,8 +30,6 @@ export const generateCSV = (submissions, formFields = [], options = {}) => {
       'Submission ID',
       'Form Title',
       'Submitted At',
-      'Status',
-      'Flags',
       'Source'
     );
   }
@@ -53,14 +51,12 @@ export const generateCSV = (submissions, formFields = [], options = {}) => {
   submissions.forEach(submission => {
     const row = [];
 
-    // Basic metadata
+    // Basic metadata (simplified - no status/flags)
     if (includeMetadata) {
       row.push(
         escapeCSVValue(submission.id || '', delimiter),
         escapeCSVValue(submission.formTitle || '', delimiter),
         escapeCSVValue(formatDate(submission.submittedAt, { format: 'long' }), delimiter),
-        escapeCSVValue(submission.status || 'new', delimiter),
-        escapeCSVValue((submission.flags || []).join('; '), delimiter),
         escapeCSVValue(submission.metadata?.source || 'web', delimiter)
       );
     }
@@ -107,7 +103,7 @@ export const generateExcelCSV = (submissions, formFields = [], options = {}) => 
   return '\uFEFF' + csvContent;
 };
 
-// Generate JSON export
+// Generate JSON export (simplified - no status/flags)
 export const generateJSON = (submissions, formFields = [], options = {}) => {
   const {
     includeMetadata = true,
@@ -124,8 +120,6 @@ export const generateJSON = (submissions, formFields = [], options = {}) => {
         formId: submission.formId,
         formTitle: submission.formTitle,
         submittedAt: submission.submittedAt,
-        status: submission.status,
-        flags: submission.flags || [],
         source: submission.metadata?.source || 'web'
       };
     }
@@ -233,14 +227,12 @@ export const exportSubmissionsJSON = (submissions, formFields = [], options = {}
   };
 };
 
-// Generate summary report
+// Generate summary report (simplified - no status/flags)
 export const generateSummaryReport = (submissions, formFields = []) => {
   const report = {
     generated: new Date().toISOString(),
     totalSubmissions: submissions.length,
     forms: {},
-    statusBreakdown: {},
-    flagBreakdown: {},
     dateRange: {
       earliest: null,
       latest: null
@@ -248,7 +240,7 @@ export const generateSummaryReport = (submissions, formFields = []) => {
     fieldAnalysis: {}
   };
 
-  // Analyze submissions
+  // Analyze submissions (simplified - no status/flags)
   submissions.forEach(submission => {
     // Form breakdown
     const formId = submission.formId;
@@ -267,17 +259,6 @@ export const generateSummaryReport = (submissions, formFields = []) => {
     }
     if (submission.submittedAt > report.forms[formId].lastSubmission) {
       report.forms[formId].lastSubmission = submission.submittedAt;
-    }
-
-    // Status breakdown
-    const status = submission.status || 'new';
-    report.statusBreakdown[status] = (report.statusBreakdown[status] || 0) + 1;
-
-    // Flag breakdown
-    if (submission.flags && submission.flags.length > 0) {
-      submission.flags.forEach(flag => {
-        report.flagBreakdown[flag] = (report.flagBreakdown[flag] || 0) + 1;
-      });
     }
 
     // Date range
@@ -352,7 +333,6 @@ export const exportSummaryReport = (submissions, formFields = [], options = {}) 
     };
   }
 
-  // Could add other formats like PDF or Excel here
   throw new Error(`Unsupported export format: ${format}`);
 };
 

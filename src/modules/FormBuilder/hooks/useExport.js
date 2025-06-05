@@ -23,7 +23,7 @@ export const useExport = (userRole = 'viewer') => {
   const [exportProgress, setExportProgress] = useState(null);
   const [lastExportResult, setLastExportResult] = useState(null);
 
-  // Export submissions with format selection
+  // Export submissions with format selection (simplified - no status/flags)
   const exportData = useCallback(async (submissions, formFields = [], options = {}) => {
     try {
       setExporting(true);
@@ -130,7 +130,7 @@ export const useExport = (userRole = 'viewer') => {
     }
   }, [userRole]);
 
-  // Export filtered submissions
+  // Export filtered submissions (simplified - no status/flags)
   const exportFiltered = useCallback(async (submissions, filters, formFields = [], options = {}) => {
     try {
       setExporting(true);
@@ -152,7 +152,7 @@ export const useExport = (userRole = 'viewer') => {
     }
   }, [userRole]);
 
-  // Export summary report
+  // Export summary report (simplified - no status/flags)
   const exportReport = useCallback(async (submissions, formFields = [], options = {}) => {
     try {
       setExporting(true);
@@ -272,7 +272,7 @@ export const useExport = (userRole = 'viewer') => {
     return { isValid: true, errors: [] };
   }, []);
 
-  // Prepare export options with defaults
+  // Prepare export options with defaults (simplified - no status/flags)
   const prepareExportOptions = useCallback((options = {}) => {
     return {
       includeMetadata: true,

@@ -1,10 +1,6 @@
-import { 
-  SUBMISSION_CONSTANTS, 
-  SUBMISSION_STATUS_CONFIG, 
-  SUBMISSION_FLAG_CONFIG 
-} from './constants';
+import { SUBMISSION_CONSTANTS } from './constants';
 
-// Format submission data for display
+// Format submission data for display (simplified - no status/flags)
 export const formatSubmissionData = (submission, formFields = []) => {
   if (!submission) return null;
 
@@ -41,9 +37,7 @@ export const formatSubmissionData = (submission, formFields = []) => {
 
   return {
     ...submission,
-    formattedData,
-    statusConfig: getStatusConfig(submission.status),
-    flagConfigs: submission.flags?.map(flag => getFlagConfig(flag)) || []
+    formattedData
   };
 };
 
@@ -94,39 +88,11 @@ export const formatFieldValue = (value, field) => {
   }
 };
 
-// Get status configuration
-export const getStatusConfig = (status) => {
-  return SUBMISSION_STATUS_CONFIG[status] || SUBMISSION_STATUS_CONFIG[SUBMISSION_CONSTANTS.STATUSES.NEW];
-};
-
-// Get flag configuration
-export const getFlagConfig = (flag) => {
-  return SUBMISSION_FLAG_CONFIG[flag] || {
-    label: flag,
-    color: 'gray',
-    bgColor: 'bg-gray-100',
-    textColor: 'text-gray-800',
-    icon: '🏷️'
-  };
-};
-
-// Filter submissions based on criteria
+// Filter submissions based on simplified criteria (no status/flags)
 export const filterSubmissions = (submissions, filters) => {
   if (!submissions || submissions.length === 0) return [];
 
   let filtered = [...submissions];
-
-  // Filter by status
-  if (filters.status && filters.status !== 'all') {
-    filtered = filtered.filter(submission => submission.status === filters.status);
-  }
-
-  // Filter by flags
-  if (filters.flags && filters.flags.length > 0) {
-    filtered = filtered.filter(submission => 
-      filters.flags.some(flag => submission.flags?.includes(flag))
-    );
-  }
 
   // Filter by date range
   if (filters.dateRange) {
@@ -184,11 +150,6 @@ export const sortSubmissions = (submissions, sortBy, sortOrder = 'desc') => {
       case 'submittedAt':
         aValue = new Date(a.submittedAt);
         bValue = new Date(b.submittedAt);
-        break;
-        
-      case 'status':
-        aValue = a.status || '';
-        bValue = b.status || '';
         break;
         
       case 'formTitle':
@@ -328,16 +289,15 @@ export const formatDate = (date, format = 'medium') => {
   return dateObj.toLocaleDateString('en-US', options[format] || options.medium);
 };
 
-// Calculate submission statistics
+// Calculate simplified submission statistics (no status/flags)
 export const calculateSubmissionStats = (submissions) => {
   if (!submissions || submissions.length === 0) {
     return {
       total: 0,
-      byStatus: {},
-      byFlag: {},
       today: 0,
       thisWeek: 0,
-      thisMonth: 0
+      thisMonth: 0,
+      byForm: {}
     };
   }
 
@@ -348,25 +308,25 @@ export const calculateSubmissionStats = (submissions) => {
 
   const stats = {
     total: submissions.length,
-    byStatus: {},
-    byFlag: {},
     today: 0,
     thisWeek: 0,
-    thisMonth: 0
+    thisMonth: 0,
+    byForm: {}
   };
 
   submissions.forEach(submission => {
     const submissionDate = new Date(submission.submittedAt);
 
-    // Count by status
-    const status = submission.status || SUBMISSION_CONSTANTS.STATUSES.NEW;
-    stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
-
-    // Count by flags
-    if (submission.flags && submission.flags.length > 0) {
-      submission.flags.forEach(flag => {
-        stats.byFlag[flag] = (stats.byFlag[flag] || 0) + 1;
-      });
+    // Count by form
+    const formId = submission.formId;
+    if (formId) {
+      if (!stats.byForm[formId]) {
+        stats.byForm[formId] = {
+          formTitle: submission.formTitle,
+          count: 0
+        };
+      }
+      stats.byForm[formId].count++;
     }
 
     // Count by time periods

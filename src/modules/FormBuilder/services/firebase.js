@@ -23,16 +23,12 @@ export {
   saveSubmissionToFirestore,
   getSubmissionsFromFirestore,
   getSubmissionFromFirestore,
-  updateSubmissionStatusInFirestore,
-  updateSubmissionFlagsInFirestore,
   addSubmissionNoteInFirestore,
   deleteSubmissionFromFirestore,
-  bulkUpdateSubmissionsInFirestore,
   bulkDeleteSubmissionsInFirestore,
   subscribeToSubmissions,
   getSubmissionStatistics,
-  searchSubmissions,
-  archiveOldSubmissions
+  searchSubmissions
 } from './submissions';
 
 export const saveFormToFirestore = async (db, formData) => {
@@ -133,7 +129,7 @@ export const getFormFromFirestore = async (db, formId) => {
 
 // ===== ENHANCED FORM OPERATIONS WITH SUBMISSION SUPPORT =====
 
-// Get form with submission statistics
+// Get form with submission statistics (simplified - no status/flags)
 export const getFormWithStatsFromFirestore = async (db, formId) => {
   try {
     const form = await getFormFromFirestore(db, formId);
@@ -147,20 +143,33 @@ export const getFormWithStatsFromFirestore = async (db, formId) => {
     const submissionsSnapshot = await getDocs(submissionsQuery);
     const submissionCount = submissionsSnapshot.size;
     
-    // Calculate basic submission stats
-    const statusCounts = {};
+    // Calculate simplified submission stats (no status/flags)
+    const timeStats = {
+      total: submissionCount,
+      today: 0,
+      thisWeek: 0,
+      thisMonth: 0
+    };
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
     submissionsSnapshot.forEach(doc => {
       const data = doc.data();
-      const status = data.status || 'new';
-      statusCounts[status] = (statusCounts[status] || 0) + 1;
+      const submittedAt = data.metadata?.submittedAt?.toDate() || new Date();
+      
+      if (submittedAt >= today) timeStats.today++;
+      if (submittedAt >= weekAgo) timeStats.thisWeek++;
+      if (submittedAt >= monthAgo) timeStats.thisMonth++;
     });
     
     return {
       ...form,
       submissionCount,
       submissionStats: {
-        total: submissionCount,
-        byStatus: statusCounts,
+        ...timeStats,
         lastSubmission: submissionCount > 0 ? new Date() : null // Simplified
       }
     };
@@ -354,7 +363,7 @@ export const subscribeToFormWithSubmissions = (db, formId, callback) => {
   }
 };
 
-// ===== ANALYTICS OPERATIONS (Enhanced) =====
+// ===== ANALYTICS OPERATIONS (Simplified - No Status/Flags) =====
 
 export const getFormAnalytics = async (db, formId) => {
   try {
@@ -382,7 +391,7 @@ export const getFormAnalytics = async (db, formId) => {
       });
     });
 
-    // Calculate analytics
+    // Calculate simplified analytics (no status/flags)
     const analytics = {
       form: {
         id: form.id,
@@ -391,8 +400,6 @@ export const getFormAnalytics = async (db, formId) => {
       },
       submissions: {
         total: submissions.length,
-        byStatus: {},
-        byFlag: {},
         byDate: {},
         recentActivity: []
       },
@@ -409,17 +416,6 @@ export const getFormAnalytics = async (db, formId) => {
       const submittedAt = submission.metadata.submittedAt;
       const dateKey = submittedAt.toISOString().split('T')[0];
 
-      // Status breakdown
-      const status = submission.status || 'new';
-      analytics.submissions.byStatus[status] = (analytics.submissions.byStatus[status] || 0) + 1;
-
-      // Flag breakdown
-      if (submission.flags && submission.flags.length > 0) {
-        submission.flags.forEach(flag => {
-          analytics.submissions.byFlag[flag] = (analytics.submissions.byFlag[flag] || 0) + 1;
-        });
-      }
-
       // Date breakdown
       analytics.submissions.byDate[dateKey] = (analytics.submissions.byDate[dateKey] || 0) + 1;
 
@@ -427,8 +423,7 @@ export const getFormAnalytics = async (db, formId) => {
       if (analytics.submissions.recentActivity.length < 10) {
         analytics.submissions.recentActivity.push({
           id: submission.id,
-          submittedAt: submittedAt,
-          status: submission.status
+          submittedAt: submittedAt
         });
       }
     });
@@ -488,7 +483,7 @@ export const getFormAnalytics = async (db, formId) => {
   }
 };
 
-// Get dashboard analytics (overview of all forms)
+// Get dashboard analytics (simplified - no status/flags)
 export const getDashboardAnalytics = async (db, userId = null) => {
   try {
     // Get all forms
@@ -519,7 +514,7 @@ export const getDashboardAnalytics = async (db, userId = null) => {
       });
     });
 
-    // Calculate dashboard analytics
+    // Calculate simplified dashboard analytics (no status/flags)
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -540,8 +535,7 @@ export const getDashboardAnalytics = async (db, userId = null) => {
         submissionsThisMonth: submissions.filter(sub => sub.metadata.submittedAt >= monthAgo).length
       },
       topForms: [],
-      recentActivity: [],
-      statusBreakdown: {}
+      recentActivity: []
     };
 
     // Calculate form performance
@@ -576,15 +570,8 @@ export const getDashboardAnalytics = async (db, userId = null) => {
         id: submission.id,
         formId: submission.formId,
         formTitle: submission.formTitle,
-        submittedAt: submission.metadata.submittedAt,
-        status: submission.status
+        submittedAt: submission.metadata.submittedAt
       }));
-
-    // Status breakdown
-    submissions.forEach(submission => {
-      const status = submission.status || 'new';
-      analytics.statusBreakdown[status] = (analytics.statusBreakdown[status] || 0) + 1;
-    });
 
     return analytics;
   } catch (error) {

@@ -1,5 +1,3 @@
-// context/SubmissionsProvider.jsx - Submissions Context Provider
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useFirebase } from './FormBuilderProvider';
 import { useSubmissions } from '../hooks/useSubmissions';
@@ -22,11 +20,9 @@ export const SubmissionsProvider = ({
   const [viewMode, setViewMode] = useState('list'); // 'list', 'details'
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null);
 
-  // Initialize hooks with configuration
+  // Initialize simplified hooks (no status/flags)
   const filters = useFilters({
     formId: selectedFormId,
-    status: 'all',
-    flags: [],
     dateRange: null,
     searchTerm: ''
   });
@@ -57,7 +53,7 @@ export const SubmissionsProvider = ({
     pagination.goToPage(1); // Reset to first page when filters change
   }, [filters.filters]);
 
-  // Submission state and data
+  // Submission state and data (simplified - no status/flags)
   const submissionsState = {
     // Core data
     submissions: submissions.submissions,
@@ -83,7 +79,7 @@ export const SubmissionsProvider = ({
     // Pagination state
     pagination: pagination.pagination,
     
-    // Filter state
+    // Filter state (simplified - no status/flags)
     filters: filters.filters,
     hasActiveFilters: filters.hasActiveFilters,
     activeFilterCount: filters.activeFilterCount,
@@ -131,7 +127,7 @@ export const SubmissionsProvider = ({
     }
   };
 
-  // Actions and methods
+  // Actions and methods (simplified - no status/flags)
   const submissionsActions = {
     // Form selection
     setSelectedFormId: (formId) => {
@@ -163,9 +159,7 @@ export const SubmissionsProvider = ({
     // Data operations
     refresh: submissions.refresh,
     
-    // CRUD operations
-    updateStatus: submissions.updateStatus,
-    updateFlags: submissions.updateFlags,
+    // CRUD operations (simplified - no status/flags updates)
     addNote: submissions.addNote,
     deleteSubmission: async (submissionId) => {
       const result = await submissions.deleteSubmission(submissionId);
@@ -177,7 +171,6 @@ export const SubmissionsProvider = ({
     },
     
     // Bulk operations
-    bulkUpdate: submissions.bulkUpdate,
     bulkDelete: async (submissionIds) => {
       const result = await submissions.bulkDelete(submissionIds);
       if (submissionIds.includes(selectedSubmissionId)) {
@@ -202,14 +195,10 @@ export const SubmissionsProvider = ({
       });
     },
     
-    // Filtering
+    // Simplified filtering (no status/flags)
     updateFilters: filters.updateFilters,
-    setStatusFilter: filters.setStatusFilter,
     setDateRangeFilter: filters.setDateRangeFilter,
     setSearchTerm: filters.setSearchTerm,
-    addFlag: filters.addFlag,
-    removeFlag: filters.removeFlag,
-    toggleFlag: filters.toggleFlag,
     clearFilters: filters.clearFilters,
     applyPresetFilter: filters.applyPresetFilter,
     
@@ -224,7 +213,7 @@ export const SubmissionsProvider = ({
     firstPage: pagination.firstPage,
     lastPage: pagination.lastPage,
     
-    // Export operations
+    // Export operations (simplified - no status/flags)
     exportSubmissions: async (format, options = {}) => {
       const dataToExport = submissionsState.filteredSubmissions;
       return await exportHook.exportData(dataToExport, [], { format, ...options });
@@ -247,7 +236,7 @@ export const SubmissionsProvider = ({
     // Search
     searchSubmissions: submissions.searchSubmissions,
     
-    // Statistics
+    // Statistics (simplified - no status/flags)
     getStatistics: submissions.getStatistics,
     
     // Utilities
@@ -257,10 +246,8 @@ export const SubmissionsProvider = ({
       exportHook.clearError();
     },
     
-    // Filter utilities
+    // Simplified filter utilities (no status/flags)
     getFilterSummary: filters.getFilterSummary,
-    getStatusOptions: filters.getStatusOptions,
-    getFlagOptions: filters.getFlagOptions,
     getDateRangeOptions: filters.getDateRangeOptions,
     
     // Export utilities

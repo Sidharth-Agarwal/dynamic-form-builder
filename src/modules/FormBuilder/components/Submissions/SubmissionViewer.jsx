@@ -4,9 +4,7 @@ import {
   Calendar, 
   User, 
   Globe, 
-  Flag, 
   MessageSquare,
-  Edit,
   Trash2,
   Download,
   Copy,
@@ -16,10 +14,8 @@ import { useSubmissionsContext } from '../../context/SubmissionsProvider';
 import Button from '../Common/Button';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import EmptyState from '../Common/EmptyState';
-import StatusBadge, { StatusBadgeList, InteractiveStatusBadge } from '../Common/StatusBadge';
 import { formatDate } from '../../utils/dateUtils';
 import { formatFieldValue } from '../../utils/submissionUtils';
-import { SUBMISSION_CONSTANTS } from '../../utils/constants';
 
 const SubmissionViewer = ({ 
   submissionId,
@@ -32,10 +28,8 @@ const SubmissionViewer = ({
     loading,
     error,
     
-    // Actions
+    // Actions (simplified - no status/flags)
     goToSubmissionsList,
-    updateStatus,
-    updateFlags,
     addNote,
     deleteSubmission,
     exportSubmissions,
@@ -74,31 +68,6 @@ const SubmissionViewer = ({
       loadSubmissionDetails();
     }
   }, [submissionId, submissions, getSubmission]);
-
-  // Handle status change
-  const handleStatusChange = async (newStatus) => {
-    try {
-      await updateStatus(submissionId, newStatus);
-      setSubmission(prev => ({ ...prev, status: newStatus }));
-    } catch (error) {
-      console.error('Failed to update status:', error);
-    }
-  };
-
-  // Handle flag toggle
-  const handleFlagToggle = async (flag) => {
-    try {
-      const currentFlags = submission.flags || [];
-      const newFlags = currentFlags.includes(flag)
-        ? currentFlags.filter(f => f !== flag)
-        : [...currentFlags, flag];
-      
-      await updateFlags(submissionId, newFlags);
-      setSubmission(prev => ({ ...prev, flags: newFlags }));
-    } catch (error) {
-      console.error('Failed to update flags:', error);
-    }
-  };
 
   // Handle add note
   const handleAddNote = async () => {
@@ -225,13 +194,10 @@ const SubmissionViewer = ({
                 <span className="text-sm text-gray-500">
                   ID: {submission.id}
                 </span>
-                <StatusBadge status={submission.status} size="small" />
-                {submission.flags && submission.flags.length > 0 && (
-                  <StatusBadgeList 
-                    statuses={submission.flags} 
-                    type="flag" 
-                    size="small"
-                  />
+                {submission.formTitle && (
+                  <span className="text-sm text-gray-500">
+                    Form: {submission.formTitle}
+                  </span>
                 )}
               </div>
             </div>
@@ -303,57 +269,17 @@ const SubmissionViewer = ({
                   </div>
                 </div>
 
-                <div className="flex items-center">
-                  <Flag className="w-5 h-5 text-gray-400 mr-3" />
-                  <div>
-                    <div className="text-sm font-medium text-gray-700">Status</div>
-                    <div className="mt-1">
-                      <StatusBadge status={submission.status} />
+                {submission.metadata.ipAddress && (
+                  <div className="flex items-center">
+                    <Globe className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <div className="text-sm font-medium text-gray-700">IP Address</div>
+                      <div className="text-sm text-gray-900 font-mono">
+                        {submission.metadata.ipAddress}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Status Management */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Status & Flags
-            </h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {Object.values(SUBMISSION_CONSTANTS.STATUSES).map(status => (
-                    <InteractiveStatusBadge
-                      key={status}
-                      status={status}
-                      isSelected={submission.status === status}
-                      onClick={() => handleStatusChange(status)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Flags
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {Object.values(SUBMISSION_CONSTANTS.FLAGS).map(flag => (
-                    <InteractiveStatusBadge
-                      key={flag}
-                      status={flag}
-                      type="flag"
-                      isSelected={submission.flags?.includes(flag)}
-                      onClick={() => handleFlagToggle(flag)}
-                    />
-                  ))}
-                </div>
+                )}
               </div>
             </div>
           </div>

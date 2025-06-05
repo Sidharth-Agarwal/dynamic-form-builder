@@ -4,13 +4,11 @@ import {
   Filter, 
   X, 
   Calendar,
-  Flag,
   RotateCcw,
   ChevronDown
 } from 'lucide-react';
 import { useSubmissionsContext } from '../../context/SubmissionsProvider';
 import Button from '../Common/Button';
-import StatusBadge, { InteractiveStatusBadge } from '../Common/StatusBadge';
 import { SUBMISSION_CONSTANTS } from '../../utils/constants';
 
 const SubmissionFilters = ({ 
@@ -18,25 +16,19 @@ const SubmissionFilters = ({
   className = '' 
 }) => {
   const {
-    // Filter state
+    // Filter state (simplified - no status/flags)
     filters,
     hasActiveFilters,
     activeFilterCount,
     getFilterSummary,
     
-    // Filter actions
+    // Filter actions (simplified)
     setSearchTerm,
-    setStatusFilter,
     setDateRangeFilter,
-    addFlag,
-    removeFlag,
-    toggleFlag,
     clearFilters,
     applyPresetFilter,
     
     // Filter options
-    getStatusOptions,
-    getFlagOptions,
     getDateRangeOptions
   } = useSubmissionsContext();
 
@@ -68,12 +60,11 @@ const SubmissionFilters = ({
     }
   };
 
-  // Preset filters
+  // Simplified preset filters (removed status/flag presets)
   const presetFilters = [
-    { key: 'new', label: 'New Submissions', icon: '🆕' },
-    { key: 'flagged', label: 'Flagged Items', icon: '🚩' },
     { key: 'recent', label: 'Last 7 Days', icon: '📅' },
-    { key: 'today', label: 'Today', icon: '📍' }
+    { key: 'today', label: 'Today', icon: '📍' },
+    { key: 'this_month', label: 'This Month', icon: '📊' }
   ];
 
   return (
@@ -162,119 +153,74 @@ const SubmissionFilters = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status
-            </label>
-            <div className="space-y-2">
-              <InteractiveStatusBadge
-                status="all"
-                isSelected={filters.status === 'all'}
-                onClick={() => setStatusFilter('all')}
-                className="w-full justify-center"
-              />
-              {Object.values(SUBMISSION_CONSTANTS.STATUSES).map(status => (
-                <InteractiveStatusBadge
-                  key={status}
-                  status={status}
-                  isSelected={filters.status === status}
-                  onClick={() => setStatusFilter(status)}
-                  className="w-full justify-center"
-                />
-              ))}
-            </div>
-          </div>
+        {/* Date Range Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Date Range
+          </label>
+          <div className="space-y-2">
+            <select
+              value={filters.dateRange?.type || 'all'}
+              onChange={(e) => handleDateRangeChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">Any time</option>
+              <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.TODAY}>Today</option>
+              <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.YESTERDAY}>Yesterday</option>
+              <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_7_DAYS}>Last 7 days</option>
+              <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_30_DAYS}>Last 30 days</option>
+              <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_90_DAYS}>Last 90 days</option>
+              <option value="custom">Custom range...</option>
+            </select>
 
-          {/* Flags Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Flags
-            </label>
-            <div className="space-y-2">
-              {Object.values(SUBMISSION_CONSTANTS.FLAGS).map(flag => (
-                <InteractiveStatusBadge
-                  key={flag}
-                  status={flag}
-                  type="flag"
-                  isSelected={filters.flags.includes(flag)}
-                  onClick={() => toggleFlag(flag)}
-                  className="w-full justify-center"
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Date Range Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date Range
-            </label>
-            <div className="space-y-2">
-              <select
-                value={filters.dateRange?.type || 'all'}
-                onChange={(e) => handleDateRangeChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">Any time</option>
-                <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.TODAY}>Today</option>
-                <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.YESTERDAY}>Yesterday</option>
-                <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_7_DAYS}>Last 7 days</option>
-                <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_30_DAYS}>Last 30 days</option>
-                <option value={SUBMISSION_CONSTANTS.FILTERS.DATE_RANGES.LAST_90_DAYS}>Last 90 days</option>
-                <option value="custom">Custom range...</option>
-              </select>
-
-              {/* Custom Date Range */}
-              {showAdvanced && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      value={customDateRange.start}
-                      onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      value={customDateRange.end}
-                      onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="small"
-                      onClick={handleCustomDateRange}
-                      disabled={!customDateRange.start || !customDateRange.end}
-                      className="flex-1"
-                    >
-                      Apply
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="small"
-                      onClick={() => setShowAdvanced(false)}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
+            {/* Custom Date Range */}
+            {showAdvanced && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={customDateRange.start}
+                    onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-              )}
-            </div>
+                
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={customDateRange.end}
+                    onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    size="small"
+                    onClick={handleCustomDateRange}
+                    disabled={!customDateRange.start || !customDateRange.end}
+                    className="flex-1"
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="small"
+                    onClick={() => setShowAdvanced(false)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

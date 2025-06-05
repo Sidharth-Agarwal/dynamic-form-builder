@@ -1,8 +1,7 @@
 import React from 'react';
-import { Eye, MoreVertical, Flag, Trash2, Edit } from 'lucide-react';
+import { Eye, MoreVertical, Trash2, Download } from 'lucide-react';
 import { useSubmissionsContext } from '../../context/SubmissionsProvider';
-import DataTable, { createColumn, createActionsColumn, dateColumn, statusColumn } from '../Common/DataTable';
-import StatusBadge, { StatusBadgeList } from '../Common/StatusBadge';
+import DataTable, { createColumn, createActionsColumn } from '../Common/DataTable';
 import Button from '../Common/Button';
 import { formatDate } from '../../utils/dateUtils';
 import { generateSubmissionSummary } from '../../utils/submissionUtils';
@@ -37,10 +36,8 @@ const SubmissionsList = ({
     updateSorting,
     sorting,
     
-    // Actions
+    // Actions (simplified - no status/flags)
     goToSubmissionDetails,
-    updateStatus,
-    updateFlags,
     deleteSubmission,
     exportSelected
   } = useSubmissionsContext();
@@ -48,30 +45,6 @@ const SubmissionsList = ({
   // Handle row click
   const handleRowClick = (submission) => {
     goToSubmissionDetails(submission.id);
-  };
-
-  // Handle status change
-  const handleStatusChange = async (submissionId, newStatus) => {
-    try {
-      await updateStatus(submissionId, newStatus);
-    } catch (error) {
-      console.error('Failed to update status:', error);
-    }
-  };
-
-  // Handle flag toggle
-  const handleFlagToggle = async (submissionId, flag) => {
-    try {
-      const submission = paginatedSubmissions.find(s => s.id === submissionId);
-      const currentFlags = submission?.flags || [];
-      const newFlags = currentFlags.includes(flag)
-        ? currentFlags.filter(f => f !== flag)
-        : [...currentFlags, flag];
-      
-      await updateFlags(submissionId, newFlags);
-    } catch (error) {
-      console.error('Failed to update flags:', error);
-    }
   };
 
   // Handle delete
@@ -82,6 +55,17 @@ const SubmissionsList = ({
       } catch (error) {
         console.error('Failed to delete submission:', error);
       }
+    }
+  };
+
+  // Handle export selected
+  const handleExportSelected = async (submissionId) => {
+    try {
+      await exportSelected('csv', {
+        filename: `submission_${submissionId}.csv`
+      });
+    } catch (error) {
+      console.error('Failed to export:', error);
     }
   };
 
@@ -115,7 +99,7 @@ const SubmissionsList = ({
     }
   };
 
-  // Column definitions
+  // Column definitions (simplified - removed status/flags columns)
   const columns = [
     createColumn({
       header: 'Submitted',
@@ -142,17 +126,6 @@ const SubmissionsList = ({
     }),
 
     createColumn({
-      header: 'Status',
-      accessor: 'status',
-      render: (status, submission) => (
-        <div className="relative">
-          <StatusBadge status={status || 'new'} size="small" />
-        </div>
-      ),
-      width: '120px'
-    }),
-
-    createColumn({
       header: 'Summary',
       accessor: 'data',
       render: (data, submission) => {
@@ -162,14 +135,9 @@ const SubmissionsList = ({
             <div className="text-sm text-gray-900 truncate">
               {summary}
             </div>
-            {submission.flags && submission.flags.length > 0 && (
-              <div className="mt-1">
-                <StatusBadgeList 
-                  statuses={submission.flags} 
-                  type="flag" 
-                  size="small"
-                  maxVisible={2}
-                />
+            {submission.formTitle && (
+              <div className="text-xs text-gray-500 mt-1">
+                Form: {submission.formTitle}
               </div>
             )}
           </div>
@@ -213,49 +181,22 @@ const SubmissionsList = ({
             title="More actions"
           />
           
-          {/* Dropdown menu */}
+          {/* Simplified dropdown menu (removed status/flag actions) */}
           <div className="absolute right-0 top-8 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
             <div className="py-1">
-              {/* Status actions */}
-              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Change Status
-              </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleStatusChange(submission.id, 'reviewed');
+                  handleExportSelected(submission.id);
                 }}
                 className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
-                Mark as Reviewed
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStatusChange(submission.id, 'archived');
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Archive
+                <Download className="w-4 h-4 inline mr-2" />
+                Export Submission
               </button>
               
               <div className="border-t border-gray-100 my-1"></div>
               
-              {/* Flag actions */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleFlagToggle(submission.id, 'important');
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Flag className="w-4 h-4 inline mr-2" />
-                {submission.flags?.includes('important') ? 'Remove' : 'Add'} Important Flag
-              </button>
-              
-              <div className="border-t border-gray-100 my-1"></div>
-              
-              {/* Delete action */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();

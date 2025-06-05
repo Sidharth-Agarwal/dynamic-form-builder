@@ -74,19 +74,22 @@ const FormRenderer = ({
         throw new Error('Database connection not available. Please check your Firebase configuration.');
       }
 
-      // Prepare submission data
+      // Simplified submission data structure (no status/flags)
       const submissionData = {
         formId: form.id || 'local_form',
         formTitle: form.title,
         data: formData,
-        submittedBy: 'anonymous',
-        userAgent: navigator?.userAgent || 'unknown',
-        source: 'web'
+        metadata: {
+          submittedBy: 'anonymous',
+          userAgent: navigator?.userAgent || 'unknown',
+          source: 'web',
+          submittedAt: new Date().toISOString()
+        }
       };
 
       console.log('🚀 Submitting to Firebase:', submissionData);
 
-      // Save to Firebase using the correct function
+      // Save to Firebase using the simplified structure
       const result = await saveSubmissionToFirestore(db, submissionData);
       
       console.log('✅ Firebase submission successful:', result);

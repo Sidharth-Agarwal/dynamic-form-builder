@@ -7,14 +7,14 @@ import {
   MoreVertical,
   Eye,
   Trash2,
-  Flag,
-  ArrowLeft
+  ArrowLeft,
+  Calendar,
+  BarChart3
 } from 'lucide-react';
 import { useSubmissionsContext } from '../../context/SubmissionsProvider';
 import Button from '../Common/Button';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import EmptyState, { NoSubmissionsState, NoFilteredResultsState } from '../Common/EmptyState';
-import StatusBadge, { StatusBadgeWithCount } from '../Common/StatusBadge';
 import SubmissionsList from './SubmissionsList';
 import SubmissionViewer from './SubmissionViewer';
 import SubmissionFilters from './SubmissionFilters';
@@ -70,7 +70,7 @@ const SubmissionDashboard = ({
   const handleBulkDelete = async () => {
     if (window.confirm(`Delete ${selectedCount} selected submissions? This action cannot be undone.`)) {
       try {
-        await bulkDelete(selectedSubmissions.map(s => s.id));
+        await bulkDelete();
         clearSelection();
         setShowBulkActions(false);
       } catch (error) {
@@ -221,7 +221,7 @@ const SubmissionDashboard = ({
     </div>
   );
 
-  // Render stats overview
+  // Render simplified stats (no status/flags)
   const renderStats = () => {
     if (loading || isEmpty) return null;
 
@@ -229,31 +229,29 @@ const SubmissionDashboard = ({
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-gray-700">Status:</span>
-            {Object.entries(stats.byStatus).map(([status, count]) => (
-              <StatusBadgeWithCount
-                key={status}
-                status={status}
-                count={count}
-                size="small"
-              />
-            ))}
-          </div>
-          
-          {Object.keys(stats.byFlag).length > 0 && (
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-700">Flags:</span>
-              {Object.entries(stats.byFlag).slice(0, 3).map(([flag, count]) => (
-                <StatusBadgeWithCount
-                  key={flag}
-                  status={flag}
-                  type="flag"
-                  count={count}
-                  size="small"
-                />
-              ))}
+            <span className="text-sm font-medium text-gray-700">Quick Stats:</span>
+            
+            <div className="flex items-center bg-blue-50 px-3 py-1 rounded-lg">
+              <Calendar className="w-4 h-4 text-blue-600 mr-2" />
+              <span className="text-sm text-blue-700 font-medium">
+                Today: {stats.today || 0}
+              </span>
             </div>
-          )}
+            
+            <div className="flex items-center bg-green-50 px-3 py-1 rounded-lg">
+              <BarChart3 className="w-4 h-4 text-green-600 mr-2" />
+              <span className="text-sm text-green-700 font-medium">
+                This Week: {stats.thisWeek || 0}
+              </span>
+            </div>
+            
+            <div className="flex items-center bg-purple-50 px-3 py-1 rounded-lg">
+              <FileText className="w-4 h-4 text-purple-600 mr-2" />
+              <span className="text-sm text-purple-700 font-medium">
+                This Month: {stats.thisMonth || 0}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -307,7 +305,7 @@ const SubmissionDashboard = ({
         <div className="flex-1 flex items-center justify-center">
           <NoFilteredResultsState 
             onClearFilters={clearFilters}
-            filterCount={activeFilterCount}
+            filterCount={2} // Only date and search filters now
           />
         </div>
       );
@@ -335,7 +333,7 @@ const SubmissionDashboard = ({
       {/* Header */}
       {renderHeader()}
 
-      {/* Stats */}
+      {/* Simplified Stats */}
       {renderStats()}
 
       {/* Filters */}

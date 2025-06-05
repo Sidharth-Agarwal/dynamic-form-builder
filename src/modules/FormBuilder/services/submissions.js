@@ -18,7 +18,7 @@ import {
 
 import { SUBMISSION_CONSTANTS, generateSubmissionId } from '../utils/constants';
 
-// Enhanced submission saving with metadata
+// Simplified submission saving (removed status/flags)
 export const saveSubmissionToFirestore = async (db, submissionData) => {
   try {
     const enhancedSubmission = {
@@ -26,8 +26,6 @@ export const saveSubmissionToFirestore = async (db, submissionData) => {
       formId: submissionData.formId,
       formTitle: submissionData.formTitle,
       data: submissionData.data || {},
-      status: submissionData.status || SUBMISSION_CONSTANTS.STATUSES.NEW,
-      flags: submissionData.flags || [],
       metadata: {
         submittedAt: serverTimestamp(),
         submittedBy: submissionData.submittedBy || 'anonymous',
@@ -59,12 +57,10 @@ export const saveSubmissionToFirestore = async (db, submissionData) => {
   }
 };
 
-// Get submissions with advanced filtering and pagination
+// Get submissions with simplified filtering (removed status/flags)
 export const getSubmissionsFromFirestore = async (db, formId = null, options = {}) => {
   try {
     const {
-      status = 'all',
-      flags = [],
       dateRange = null,
       searchTerm = '',
       sortBy = 'submittedAt',
@@ -80,19 +76,8 @@ export const getSubmissionsFromFirestore = async (db, formId = null, options = {
       q = query(q, where('formId', '==', formId));
     }
 
-    // Filter by status
-    if (status !== 'all') {
-      q = query(q, where('status', '==', status));
-    }
-
-    // Filter by flags (if any flags specified)
-    if (flags && flags.length > 0) {
-      q = query(q, where('flags', 'array-contains-any', flags));
-    }
-
-    // Date range filtering (handled client-side for complex ranges)
+    // Date range filtering
     if (dateRange && dateRange.start && dateRange.end) {
-      // For Firestore, we'll use server timestamps
       q = query(q, 
         where('metadata.submittedAt', '>=', new Date(dateRange.start)),
         where('metadata.submittedAt', '<=', new Date(dateRange.end))
@@ -129,7 +114,7 @@ export const getSubmissionsFromFirestore = async (db, formId = null, options = {
       });
     });
 
-    // Client-side search filtering (for complex text search)
+    // Client-side search filtering
     let filteredSubmissions = submissions;
     if (searchTerm && searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase().trim();
@@ -196,41 +181,7 @@ export const getSubmissionFromFirestore = async (db, submissionId) => {
   }
 };
 
-// Update submission status
-export const updateSubmissionStatusInFirestore = async (db, submissionId, status) => {
-  try {
-    const submissionRef = doc(db, 'form_submissions', submissionId);
-    await updateDoc(submissionRef, {
-      status: status,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log('Submission status updated:', submissionId, status);
-    return { id: submissionId, status };
-  } catch (error) {
-    console.error('Error updating submission status:', error);
-    throw new Error(`Failed to update submission status: ${error.message}`);
-  }
-};
-
-// Add/remove flags from submission
-export const updateSubmissionFlagsInFirestore = async (db, submissionId, flags) => {
-  try {
-    const submissionRef = doc(db, 'form_submissions', submissionId);
-    await updateDoc(submissionRef, {
-      flags: flags,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log('Submission flags updated:', submissionId, flags);
-    return { id: submissionId, flags };
-  } catch (error) {
-    console.error('Error updating submission flags:', error);
-    throw new Error(`Failed to update submission flags: ${error.message}`);
-  }
-};
-
-// Add note to submission
+// Add note to submission (keeping notes functionality)
 export const addSubmissionNoteInFirestore = async (db, submissionId, note) => {
   try {
     const submission = await getSubmissionFromFirestore(db, submissionId);
@@ -270,29 +221,6 @@ export const deleteSubmissionFromFirestore = async (db, submissionId) => {
   }
 };
 
-// Bulk update submissions
-export const bulkUpdateSubmissionsInFirestore = async (db, submissionIds, updates) => {
-  try {
-    const batch = writeBatch(db);
-    const timestamp = serverTimestamp();
-
-    submissionIds.forEach(id => {
-      const submissionRef = doc(db, 'form_submissions', id);
-      batch.update(submissionRef, {
-        ...updates,
-        updatedAt: timestamp
-      });
-    });
-
-    await batch.commit();
-    console.log(`Bulk updated ${submissionIds.length} submissions`);
-    return { updatedIds: submissionIds, updates };
-  } catch (error) {
-    console.error('Error bulk updating submissions:', error);
-    throw new Error(`Failed to bulk update submissions: ${error.message}`);
-  }
-};
-
 // Bulk delete submissions
 export const bulkDeleteSubmissionsInFirestore = async (db, submissionIds) => {
   try {
@@ -312,12 +240,11 @@ export const bulkDeleteSubmissionsInFirestore = async (db, submissionIds) => {
   }
 };
 
-// Real-time subscription to submissions
+// Simplified real-time subscription (removed status filtering)
 export const subscribeToSubmissions = (db, callback, options = {}) => {
   try {
     const {
       formId = null,
-      status = 'all',
       sortBy = 'submittedAt',
       sortOrder = 'desc'
     } = options;
@@ -326,10 +253,6 @@ export const subscribeToSubmissions = (db, callback, options = {}) => {
     
     if (formId) {
       q = query(q, where('formId', '==', formId));
-    }
-    
-    if (status !== 'all') {
-      q = query(q, where('status', '==', status));
     }
     
     q = query(q, orderBy(sortBy === 'submittedAt' ? 'metadata.submittedAt' : sortBy, sortOrder));
@@ -361,7 +284,7 @@ export const subscribeToSubmissions = (db, callback, options = {}) => {
   }
 };
 
-// Get submission statistics
+// Simplified submission statistics (removed status/flags)
 export const getSubmissionStatistics = async (db, formId = null, dateRange = null) => {
   try {
     let q = collection(db, 'form_submissions');
@@ -381,8 +304,6 @@ export const getSubmissionStatistics = async (db, formId = null, dateRange = nul
     
     const stats = {
       total: 0,
-      byStatus: {},
-      byFlag: {},
       byForm: {},
       byDate: {},
       averageResponseTime: 0
@@ -391,17 +312,6 @@ export const getSubmissionStatistics = async (db, formId = null, dateRange = nul
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       stats.total++;
-
-      // Count by status
-      const status = data.status || SUBMISSION_CONSTANTS.STATUSES.NEW;
-      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
-
-      // Count by flags
-      if (data.flags && data.flags.length > 0) {
-        data.flags.forEach(flag => {
-          stats.byFlag[flag] = (stats.byFlag[flag] || 0) + 1;
-        });
-      }
 
       // Count by form
       if (data.formId) {
@@ -428,7 +338,7 @@ export const getSubmissionStatistics = async (db, formId = null, dateRange = nul
   }
 };
 
-// Search submissions across all fields
+// Simplified search submissions
 export const searchSubmissions = async (db, searchTerm, options = {}) => {
   try {
     const {
@@ -436,8 +346,6 @@ export const searchSubmissions = async (db, searchTerm, options = {}) => {
       limit: searchLimit = 50
     } = options;
 
-    // Note: Firestore doesn't support full-text search natively
-    // This is a basic implementation - for production, consider using Algolia or similar
     let q = collection(db, 'form_submissions');
     
     if (formId) {
@@ -509,34 +417,5 @@ export const searchSubmissions = async (db, searchTerm, options = {}) => {
   } catch (error) {
     console.error('Error searching submissions:', error);
     throw new Error(`Failed to search submissions: ${error.message}`);
-  }
-};
-
-// Archive old submissions
-export const archiveOldSubmissions = async (db, cutoffDate) => {
-  try {
-    const q = query(
-      collection(db, 'form_submissions'),
-      where('metadata.submittedAt', '<', cutoffDate),
-      where('status', '!=', SUBMISSION_CONSTANTS.STATUSES.ARCHIVED)
-    );
-
-    const querySnapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    
-    querySnapshot.forEach((doc) => {
-      batch.update(doc.ref, {
-        status: SUBMISSION_CONSTANTS.STATUSES.ARCHIVED,
-        updatedAt: serverTimestamp()
-      });
-    });
-
-    await batch.commit();
-    
-    console.log(`Archived ${querySnapshot.docs.length} old submissions`);
-    return { archivedCount: querySnapshot.docs.length };
-  } catch (error) {
-    console.error('Error archiving old submissions:', error);
-    throw new Error(`Failed to archive old submissions: ${error.message}`);
   }
 };

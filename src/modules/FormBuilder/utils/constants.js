@@ -16,23 +16,8 @@ export const FORM_BUILDER_CONSTANTS = {
   DEFAULT_MAX_RATING: 5
 };
 
-// 🆕 NEW: Submission Constants
+// 🆕 Simplified Submission Constants (Removed Status/Flags)
 export const SUBMISSION_CONSTANTS = {
-  STATUSES: {
-    NEW: 'new',
-    REVIEWED: 'reviewed',
-    ARCHIVED: 'archived',
-    FLAGGED: 'flagged',
-    SPAM: 'spam'
-  },
-  
-  FLAGS: {
-    IMPORTANT: 'important',
-    FOLLOW_UP: 'follow-up',
-    URGENT: 'urgent',
-    COMPLETED: 'completed'
-  },
-  
   SOURCES: {
     WEB: 'web',
     MOBILE: 'mobile',
@@ -59,7 +44,6 @@ export const SUBMISSION_CONSTANTS = {
     SORT_OPTIONS: {
       NEWEST_FIRST: { field: 'submittedAt', order: 'desc' },
       OLDEST_FIRST: { field: 'submittedAt', order: 'asc' },
-      STATUS: { field: 'status', order: 'asc' },
       FORM_TITLE: { field: 'formTitle', order: 'asc' }
     }
   },
@@ -78,86 +62,13 @@ export const SUBMISSION_CONSTANTS = {
       SUBMISSION_ID: 'Submission ID',
       FORM_TITLE: 'Form Title',
       SUBMITTED_AT: 'Submitted At',
-      STATUS: 'Status',
-      FLAGS: 'Flags',
       USER_AGENT: 'User Agent',
       IP_ADDRESS: 'IP Address'
     }
   }
 };
 
-// 🆕 NEW: Submission Status Configurations
-export const SUBMISSION_STATUS_CONFIG = {
-  [SUBMISSION_CONSTANTS.STATUSES.NEW]: {
-    label: 'New',
-    color: 'blue',
-    bgColor: 'bg-blue-100',
-    textColor: 'text-blue-800',
-    icon: '🆕'
-  },
-  [SUBMISSION_CONSTANTS.STATUSES.REVIEWED]: {
-    label: 'Reviewed',
-    color: 'green',
-    bgColor: 'bg-green-100',
-    textColor: 'text-green-800',
-    icon: '✅'
-  },
-  [SUBMISSION_CONSTANTS.STATUSES.ARCHIVED]: {
-    label: 'Archived',
-    color: 'gray',
-    bgColor: 'bg-gray-100',
-    textColor: 'text-gray-800',
-    icon: '📁'
-  },
-  [SUBMISSION_CONSTANTS.STATUSES.FLAGGED]: {
-    label: 'Flagged',
-    color: 'yellow',
-    bgColor: 'bg-yellow-100',
-    textColor: 'text-yellow-800',
-    icon: '🚩'
-  },
-  [SUBMISSION_CONSTANTS.STATUSES.SPAM]: {
-    label: 'Spam',
-    color: 'red',
-    bgColor: 'bg-red-100',
-    textColor: 'text-red-800',
-    icon: '🚫'
-  }
-};
-
-// 🆕 NEW: Submission Flag Configurations
-export const SUBMISSION_FLAG_CONFIG = {
-  [SUBMISSION_CONSTANTS.FLAGS.IMPORTANT]: {
-    label: 'Important',
-    color: 'red',
-    bgColor: 'bg-red-100',
-    textColor: 'text-red-800',
-    icon: '⭐'
-  },
-  [SUBMISSION_CONSTANTS.FLAGS.FOLLOW_UP]: {
-    label: 'Follow Up',
-    color: 'orange',
-    bgColor: 'bg-orange-100',
-    textColor: 'text-orange-800',
-    icon: '📞'
-  },
-  [SUBMISSION_CONSTANTS.FLAGS.URGENT]: {
-    label: 'Urgent',
-    color: 'red',
-    bgColor: 'bg-red-100',
-    textColor: 'text-red-800',
-    icon: '🚨'
-  },
-  [SUBMISSION_CONSTANTS.FLAGS.COMPLETED]: {
-    label: 'Completed',
-    color: 'green',
-    bgColor: 'bg-green-100',
-    textColor: 'text-green-800',
-    icon: '✔️'
-  }
-};
-
-// UI Messages (existing + new)
+// UI Messages (updated - removed status/flag messages)
 export const MESSAGES = {
   // Existing messages
   FORM_SAVED: 'Form saved successfully!',
@@ -172,12 +83,9 @@ export const MESSAGES = {
   FILE_SIZE_ERROR: 'File size exceeds limit',
   FILE_TYPE_ERROR: 'File type not allowed',
   
-  // 🆕 NEW: Submission messages
+  // Simplified submission messages (removed status/flag related)
   SUBMISSION_DELETED: 'Submission deleted successfully!',
   SUBMISSIONS_EXPORTED: 'Submissions exported successfully!',
-  STATUS_UPDATED: 'Status updated successfully!',
-  FLAG_ADDED: 'Flag added successfully!',
-  FLAG_REMOVED: 'Flag removed successfully!',
   NOTE_ADDED: 'Note added successfully!',
   BULK_ACTION_COMPLETED: 'Bulk action completed successfully!',
   SUBMISSION_NOT_FOUND: 'Submission not found',
@@ -313,16 +221,16 @@ export const VIEWS = {
   BUILDER: 'builder', 
   RENDERER: 'renderer',
   ANALYTICS: 'analytics',
-  SUBMISSIONS: 'submissions' // 🆕 NEW
+  SUBMISSIONS: 'submissions'
 };
 
-// Storage Keys (existing + new)
+// Storage Keys (existing)
 export const STORAGE_KEYS = {
   SAVED_FORMS: 'formBuilder_savedForms',
   USER_PREFERENCES: 'formBuilder_preferences',
   DRAFT_FORM: 'formBuilder_draft',
-  SUBMISSION_FILTERS: 'formBuilder_submissionFilters', // 🆕 NEW
-  PAGINATION_SETTINGS: 'formBuilder_paginationSettings' // 🆕 NEW
+  SUBMISSION_FILTERS: 'formBuilder_submissionFilters',
+  PAGINATION_SETTINGS: 'formBuilder_paginationSettings'
 };
 
 // API Endpoints (existing)
@@ -333,25 +241,25 @@ export const API_ENDPOINTS = {
   TEMPLATES: '/templates'
 };
 
-// Error Codes (existing + new)
+// Error Codes (simplified - removed status/flag related)
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   NETWORK_ERROR: 'NETWORK_ERROR',
   FILE_UPLOAD_ERROR: 'FILE_UPLOAD_ERROR',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   FORM_NOT_FOUND: 'FORM_NOT_FOUND',
-  SUBMISSION_NOT_FOUND: 'SUBMISSION_NOT_FOUND', // 🆕 NEW
-  EXPORT_ERROR: 'EXPORT_ERROR', // 🆕 NEW
-  BULK_ACTION_ERROR: 'BULK_ACTION_ERROR' // 🆕 NEW
+  SUBMISSION_NOT_FOUND: 'SUBMISSION_NOT_FOUND',
+  EXPORT_ERROR: 'EXPORT_ERROR',
+  BULK_ACTION_ERROR: 'BULK_ACTION_ERROR'
 };
 
-// Success Codes (existing + new)
+// Success Codes (simplified - removed status/flag related)
 export const SUCCESS_CODES = {
   FORM_SAVED: 'FORM_SAVED',
   FORM_SUBMITTED: 'FORM_SUBMITTED',
   FIELD_ADDED: 'FIELD_ADDED',
   FILE_UPLOADED: 'FILE_UPLOADED',
-  SUBMISSION_UPDATED: 'SUBMISSION_UPDATED', // 🆕 NEW
-  SUBMISSIONS_EXPORTED: 'SUBMISSIONS_EXPORTED', // 🆕 NEW
-  BULK_ACTION_SUCCESS: 'BULK_ACTION_SUCCESS' // 🆕 NEW
+  SUBMISSION_UPDATED: 'SUBMISSION_UPDATED',
+  SUBMISSIONS_EXPORTED: 'SUBMISSIONS_EXPORTED',
+  BULK_ACTION_SUCCESS: 'BULK_ACTION_SUCCESS'
 };

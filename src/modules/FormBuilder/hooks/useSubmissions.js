@@ -3,11 +3,8 @@ import { useFirebase } from '../context/FormBuilderProvider';
 import {
   getSubmissionsFromFirestore,
   getSubmissionFromFirestore,
-  updateSubmissionStatusInFirestore,
-  updateSubmissionFlagsInFirestore,
   addSubmissionNoteInFirestore,
   deleteSubmissionFromFirestore,
-  bulkUpdateSubmissionsInFirestore,
   bulkDeleteSubmissionsInFirestore,
   subscribeToSubmissions,
   getSubmissionStatistics,
@@ -38,10 +35,8 @@ export const useSubmissions = (formId = null, options = {}) => {
   const [error, setError] = useState(null);
   const [selectedSubmissions, setSelectedSubmissions] = useState([]);
 
-  // Filters and sorting
+  // Simplified filters (no status/flags)
   const [filters, setFilters] = useState({
-    status: 'all',
-    flags: [],
     dateRange: null,
     searchTerm: '',
     formId: formId
@@ -60,14 +55,14 @@ export const useSubmissions = (formId = null, options = {}) => {
     totalPages: 0
   });
 
-  // Statistics
+  // Simplified statistics (no status/flags)
   const [stats, setStats] = useState({
     total: 0,
-    byStatus: {},
-    byFlag: {},
     today: 0,
     thisWeek: 0,
-    thisMonth: 0
+    thisMonth: 0,
+    byDate: {},
+    byForm: {}
   });
 
   // Real-time subscription
@@ -109,7 +104,7 @@ export const useSubmissions = (formId = null, options = {}) => {
         page
       });
 
-      // Calculate statistics
+      // Calculate simplified statistics
       const submissionStats = calculateSubmissionStats(sortedSubmissions);
       setStats(submissionStats);
 
@@ -145,8 +140,7 @@ export const useSubmissions = (formId = null, options = {}) => {
           setStats(submissionStats);
         },
         {
-          formId,
-          status: filters.status !== 'all' ? filters.status : undefined
+          formId
         }
       );
 
@@ -186,7 +180,7 @@ export const useSubmissions = (formId = null, options = {}) => {
     }
   }, [pagination.page]);
 
-  // Update filters
+  // Update filters (simplified - no status/flags)
   const updateFilters = useCallback((newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
     setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
@@ -225,49 +219,7 @@ export const useSubmissions = (formId = null, options = {}) => {
     }
   }, [db]);
 
-  // Update submission status
-  const updateStatus = useCallback(async (submissionId, status) => {
-    if (!db) throw new Error('Database not available');
-
-    try {
-      await updateSubmissionStatusInFirestore(db, submissionId, status);
-      
-      // Update local state
-      setSubmissions(prev => prev.map(submission => 
-        submission.id === submissionId 
-          ? { ...submission, status }
-          : submission
-      ));
-
-      return { success: true };
-    } catch (err) {
-      console.error('Error updating status:', err);
-      throw err;
-    }
-  }, [db]);
-
-  // Update submission flags
-  const updateFlags = useCallback(async (submissionId, flags) => {
-    if (!db) throw new Error('Database not available');
-
-    try {
-      await updateSubmissionFlagsInFirestore(db, submissionId, flags);
-      
-      // Update local state
-      setSubmissions(prev => prev.map(submission => 
-        submission.id === submissionId 
-          ? { ...submission, flags }
-          : submission
-      ));
-
-      return { success: true };
-    } catch (err) {
-      console.error('Error updating flags:', err);
-      throw err;
-    }
-  }, [db]);
-
-  // Add note to submission
+  // Add note to submission (keeping notes functionality)
   const addNote = useCallback(async (submissionId, note) => {
     if (!db) throw new Error('Database not available');
 
@@ -307,27 +259,6 @@ export const useSubmissions = (formId = null, options = {}) => {
       return { success: true };
     } catch (err) {
       console.error('Error deleting submission:', err);
-      throw err;
-    }
-  }, [db]);
-
-  // Bulk update submissions
-  const bulkUpdate = useCallback(async (submissionIds, updates) => {
-    if (!db) throw new Error('Database not available');
-
-    try {
-      await bulkUpdateSubmissionsInFirestore(db, submissionIds, updates);
-      
-      // Update local state
-      setSubmissions(prev => prev.map(submission => 
-        submissionIds.includes(submission.id)
-          ? { ...submission, ...updates }
-          : submission
-      ));
-
-      return { success: true, updatedCount: submissionIds.length };
-    } catch (err) {
-      console.error('Error bulk updating submissions:', err);
       throw err;
     }
   }, [db]);
@@ -441,7 +372,7 @@ export const useSubmissions = (formId = null, options = {}) => {
     changePage,
     changePageSize,
     
-    // Filtering and sorting
+    // Filtering and sorting (simplified - no status/flags)
     filters,
     updateFilters,
     sorting,
@@ -454,13 +385,10 @@ export const useSubmissions = (formId = null, options = {}) => {
     clearSelection,
     isSelected,
     
-    // CRUD operations
+    // CRUD operations (simplified - no status/flags)
     getSubmission,
-    updateStatus,
-    updateFlags,
     addNote,
     deleteSubmission,
-    bulkUpdate,
     bulkDelete,
     
     // Search
