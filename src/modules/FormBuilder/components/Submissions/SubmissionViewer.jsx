@@ -8,7 +8,9 @@ import {
   Trash2,
   Download,
   Copy,
-  Check
+  Check,
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 import { useSubmissionsContext } from '../../context/SubmissionsProvider';
 import Button from '../Common/Button';
@@ -19,7 +21,7 @@ import { formatFieldValue } from '../../utils/submissionUtils';
 
 const SubmissionViewer = ({ 
   submissionId,
-  formFields = [],
+  formFields = [], // Fallback prop for backwards compatibility
   className = '' 
 }) => {
   const {
@@ -41,6 +43,7 @@ const SubmissionViewer = ({
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+  const [hasStoredFields, setHasStoredFields] = useState(false);
 
   // Load submission details
   useEffect(() => {
@@ -49,6 +52,7 @@ const SubmissionViewer = ({
       const existingSubmission = submissions.find(s => s.id === submissionId);
       if (existingSubmission) {
         setSubmission(existingSubmission);
+        setHasStoredFields(existingSubmission.formFields && existingSubmission.formFields.length > 0);
         return;
       }
 
@@ -57,6 +61,7 @@ const SubmissionViewer = ({
         setLoadingSubmission(true);
         const fetchedSubmission = await getSubmission(submissionId);
         setSubmission(fetchedSubmission);
+        setHasStoredFields(fetchedSubmission.formFields && fetchedSubmission.formFields.length > 0);
       } catch (err) {
         console.error('Failed to load submission:', err);
       } finally {
@@ -123,6 +128,14 @@ const SubmissionViewer = ({
     }
   };
 
+  // Get effective form fields (stored fields take priority)
+  const getEffectiveFormFields = () => {
+    if (submission?.formFields && submission.formFields.length > 0) {
+      return submission.formFields;
+    }
+    return formFields; // Fallback for legacy submissions
+  };
+
   // Loading state
   if (loading || loadingSubmission) {
     return (
@@ -171,6 +184,8 @@ const SubmissionViewer = ({
     );
   }
 
+  const effectiveFormFields = getEffectiveFormFields();
+
   return (
     <div className={`h-full flex flex-col bg-white ${className}`}>
       {/* Header */}
@@ -197,6 +212,12 @@ const SubmissionViewer = ({
                 {submission.formTitle && (
                   <span className="text-sm text-gray-500">
                     Form: {submission.formTitle}
+                  </span>
+                )}
+                {hasStoredFields && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <FileText className="w-3 h-3 mr-1" />
+                    Enhanced Data
                   </span>
                 )}
               </div>
@@ -229,6 +250,21 @@ const SubmissionViewer = ({
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto p-6 space-y-8">
+          {/* Field Source Info */}
+          {!hasStoredFields && effectiveFormFields.length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
+                <div>
+                  <h4 className="text-sm font-medium text-yellow-800">Legacy Submission</h4>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    This submission was created before field definitions were stored. Using fallback field configuration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Metadata Section */}
           <div className="bg-gray-50 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -242,7 +278,7 @@ const SubmissionViewer = ({
                   <div>
                     <div className="text-sm font-medium text-gray-700">Submitted At</div>
                     <div className="text-sm text-gray-900">
-                      {formatDate(submission.metadata.submittedAt, { format: 'long' })}
+                      {formatDate(submission.metadata?.submittedAt || submission.submittedAt, { format: 'long' })}
                     </div>
                   </div>
                 </div>
@@ -252,7 +288,7 @@ const SubmissionViewer = ({
                   <div>
                     <div className="text-sm font-medium text-gray-700">Source</div>
                     <div className="text-sm text-gray-900 capitalize">
-                      {submission.metadata.source || 'web'}
+                      {submission.metadata?.source || 'web'}
                     </div>
                   </div>
                 </div>
@@ -264,18 +300,30 @@ const SubmissionViewer = ({
                   <div>
                     <div className="text-sm font-medium text-gray-700">Submitted By</div>
                     <div className="text-sm text-gray-900">
-                      {submission.metadata.submittedBy || 'Anonymous'}
+                      {submission.metadata?.submittedBy || 'Anonymous'}
                     </div>
                   </div>
                 </div>
 
-                {submission.metadata.ipAddress && (
+                {submission.metadata?.ipAddress && (
                   <div className="flex items-center">
                     <Globe className="w-5 h-5 text-gray-400 mr-3" />
                     <div>
                       <div className="text-sm font-medium text-gray-700">IP Address</div>
                       <div className="text-sm text-gray-900 font-mono">
                         {submission.metadata.ipAddress}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {hasStoredFields && (
+                  <div className="flex items-center">
+                    <FileText className="w-5 h-5 text-gray-400 mr-3" />
+                    <div>
+                      <div className="text-sm font-medium text-gray-700">Field Definitions</div>
+                      <div className="text-sm text-gray-900">
+                        {effectiveFormFields.length} field{effectiveFormFields.length !== 1 ? 's' : ''} stored
                       </div>
                     </div>
                   </div>
@@ -288,12 +336,18 @@ const SubmissionViewer = ({
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Form Data
+              {hasStoredFields && (
+                <span className="ml-2 text-sm font-normal text-green-600">
+                  (Using stored field definitions)
+                </span>
+              )}
             </h2>
             
             {submission.data && Object.keys(submission.data).length > 0 ? (
               <div className="space-y-4">
                 {Object.entries(submission.data).map(([fieldId, value]) => {
-                  const field = formFields.find(f => f.id === fieldId) || {
+                  // Find field definition from stored fields or fallback
+                  const field = effectiveFormFields.find(f => f.id === fieldId) || {
                     id: fieldId,
                     label: fieldId,
                     type: 'text'
@@ -314,6 +368,11 @@ const SubmissionViewer = ({
                           <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
                             {field.type}
                           </span>
+                          {!hasStoredFields && effectiveFormFields.find(f => f.id === fieldId) && (
+                            <span className="ml-2 text-xs bg-yellow-100 text-yellow-600 px-2 py-1 rounded-full">
+                              fallback
+                            </span>
+                          )}
                         </div>
                         
                         <Button
@@ -360,6 +419,43 @@ const SubmissionViewer = ({
               </div>
             )}
           </div>
+
+          {/* Field Definitions Section (NEW) */}
+          {hasStoredFields && (
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Stored Field Definitions
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {effectiveFormFields.map((field, index) => (
+                  <div key={field.id} className="border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                        {field.type}
+                      </span>
+                      <span className="text-xs text-gray-500">#{index + 1}</span>
+                    </div>
+                    <h4 className="font-medium text-sm text-gray-900 mb-1">
+                      {field.label}
+                    </h4>
+                    {field.required && (
+                      <span className="text-xs text-red-600">Required field</span>
+                    )}
+                    {field.options && (
+                      <div className="mt-2">
+                        <span className="text-xs text-gray-500">Options: </span>
+                        <span className="text-xs text-gray-700">
+                          {field.options.slice(0, 3).join(', ')}
+                          {field.options.length > 3 && '...'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Notes Section */}
           <div className="bg-white border border-gray-200 rounded-lg p-6">

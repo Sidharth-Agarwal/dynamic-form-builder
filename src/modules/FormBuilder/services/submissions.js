@@ -18,14 +18,21 @@ import {
 
 import { SUBMISSION_CONSTANTS, generateSubmissionId } from '../utils/constants';
 
-// Simplified submission saving (removed status/flags)
+// Enhanced submission saving with form fields
 export const saveSubmissionToFirestore = async (db, submissionData) => {
   try {
     const enhancedSubmission = {
       id: submissionData.id || generateSubmissionId(),
       formId: submissionData.formId,
       formTitle: submissionData.formTitle,
+      
+      // Original form data
       data: submissionData.data || {},
+      
+      // NEW: Save the form fields for proper display later
+      formFields: submissionData.formFields || [],
+      
+      // Enhanced metadata
       metadata: {
         submittedAt: serverTimestamp(),
         submittedBy: submissionData.submittedBy || 'anonymous',
@@ -35,6 +42,7 @@ export const saveSubmissionToFirestore = async (db, submissionData) => {
         version: 1,
         ...submissionData.metadata
       },
+      
       notes: submissionData.notes || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -57,7 +65,7 @@ export const saveSubmissionToFirestore = async (db, submissionData) => {
   }
 };
 
-// Get submissions with simplified filtering (removed status/flags)
+// Get submissions with enhanced field data
 export const getSubmissionsFromFirestore = async (db, formId = null, options = {}) => {
   try {
     const {
@@ -105,6 +113,8 @@ export const getSubmissionsFromFirestore = async (db, formId = null, options = {
       submissions.push({
         id: doc.id,
         ...data,
+        // Ensure formFields is always an array
+        formFields: data.formFields || [],
         metadata: {
           ...data.metadata,
           submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date(data.submittedAt || Date.now())
@@ -143,7 +153,7 @@ export const getSubmissionsFromFirestore = async (db, formId = null, options = {
       });
     }
 
-    console.log(`Fetched ${filteredSubmissions.length} submissions`);
+    console.log(`Fetched ${filteredSubmissions.length} submissions with field definitions`);
     return {
       submissions: filteredSubmissions,
       lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1] || null,
@@ -155,7 +165,7 @@ export const getSubmissionsFromFirestore = async (db, formId = null, options = {
   }
 };
 
-// Get single submission by ID
+// Get single submission by ID with enhanced field data
 export const getSubmissionFromFirestore = async (db, submissionId) => {
   try {
     const docSnap = await getDoc(doc(db, 'form_submissions', submissionId));
@@ -165,6 +175,8 @@ export const getSubmissionFromFirestore = async (db, submissionId) => {
       return {
         id: docSnap.id,
         ...data,
+        // Ensure formFields is always an array
+        formFields: data.formFields || [],
         metadata: {
           ...data.metadata,
           submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date(data.submittedAt || Date.now())
@@ -240,7 +252,7 @@ export const bulkDeleteSubmissionsInFirestore = async (db, submissionIds) => {
   }
 };
 
-// Simplified real-time subscription (removed status filtering)
+// Enhanced real-time subscription with field data
 export const subscribeToSubmissions = (db, callback, options = {}) => {
   try {
     const {
@@ -265,6 +277,8 @@ export const subscribeToSubmissions = (db, callback, options = {}) => {
         submissions.push({
           id: doc.id,
           ...data,
+          // Ensure formFields is always an array
+          formFields: data.formFields || [],
           metadata: {
             ...data.metadata,
             submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date(data.submittedAt || Date.now())
@@ -284,7 +298,7 @@ export const subscribeToSubmissions = (db, callback, options = {}) => {
   }
 };
 
-// Simplified submission statistics (removed status/flags)
+// Submission statistics with enhanced field data
 export const getSubmissionStatistics = async (db, formId = null, dateRange = null) => {
   try {
     let q = collection(db, 'form_submissions');
@@ -306,7 +320,8 @@ export const getSubmissionStatistics = async (db, formId = null, dateRange = nul
       total: 0,
       byForm: {},
       byDate: {},
-      averageResponseTime: 0
+      averageResponseTime: 0,
+      fieldStats: {} // NEW: Field-level statistics
     };
 
     querySnapshot.forEach((doc) => {
@@ -328,9 +343,29 @@ export const getSubmissionStatistics = async (db, formId = null, dateRange = nul
       const submittedAt = data.metadata?.submittedAt?.toDate?.() || new Date(data.submittedAt || Date.now());
       const dateKey = submittedAt.toISOString().split('T')[0];
       stats.byDate[dateKey] = (stats.byDate[dateKey] || 0) + 1;
+
+      // NEW: Analyze field usage if formFields are available
+      if (data.formFields && Array.isArray(data.formFields)) {
+        data.formFields.forEach(field => {
+          if (!stats.fieldStats[field.id]) {
+            stats.fieldStats[field.id] = {
+              label: field.label,
+              type: field.type,
+              usage: 0,
+              responses: 0
+            };
+          }
+          stats.fieldStats[field.id].usage++;
+          
+          // Check if this field has a response
+          if (data.data && data.data[field.id] !== undefined && data.data[field.id] !== null && data.data[field.id] !== '') {
+            stats.fieldStats[field.id].responses++;
+          }
+        });
+      }
     });
 
-    console.log(`Calculated statistics for ${stats.total} submissions`);
+    console.log(`Calculated enhanced statistics for ${stats.total} submissions`);
     return stats;
   } catch (error) {
     console.error('Error getting submission statistics:', error);
@@ -338,7 +373,7 @@ export const getSubmissionStatistics = async (db, formId = null, dateRange = nul
   }
 };
 
-// Simplified search submissions
+// Enhanced search submissions
 export const searchSubmissions = async (db, searchTerm, options = {}) => {
   try {
     const {
@@ -366,6 +401,7 @@ export const searchSubmissions = async (db, searchTerm, options = {}) => {
         results.push({
           id: doc.id,
           ...data,
+          formFields: data.formFields || [],
           metadata: {
             ...data.metadata,
             submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
@@ -376,18 +412,43 @@ export const searchSubmissions = async (db, searchTerm, options = {}) => {
         return;
       }
       
-      // Search in submission data
-      if (data.data) {
-        for (const [fieldId, value] of Object.entries(data.data)) {
-          if (typeof value === 'string' && value.toLowerCase().includes(searchTermLower)) {
+      // Search in field labels (NEW: using stored formFields)
+      if (data.formFields && Array.isArray(data.formFields)) {
+        for (const field of data.formFields) {
+          if (field.label?.toLowerCase().includes(searchTermLower)) {
             results.push({
               id: doc.id,
               ...data,
+              formFields: data.formFields || [],
               metadata: {
                 ...data.metadata,
                 submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
               },
-              matchField: fieldId,
+              matchField: 'fieldLabel',
+              matchValue: field.label
+            });
+            return;
+          }
+        }
+      }
+      
+      // Search in submission data
+      if (data.data) {
+        for (const [fieldId, value] of Object.entries(data.data)) {
+          if (typeof value === 'string' && value.toLowerCase().includes(searchTermLower)) {
+            // Find field label from stored formFields
+            const field = data.formFields?.find(f => f.id === fieldId);
+            const fieldLabel = field?.label || fieldId;
+            
+            results.push({
+              id: doc.id,
+              ...data,
+              formFields: data.formFields || [],
+              metadata: {
+                ...data.metadata,
+                submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
+              },
+              matchField: fieldLabel,
               matchValue: value
             });
             break;
@@ -396,14 +457,19 @@ export const searchSubmissions = async (db, searchTerm, options = {}) => {
           if (Array.isArray(value) && value.some(item => 
             typeof item === 'string' && item.toLowerCase().includes(searchTermLower)
           )) {
+            // Find field label from stored formFields
+            const field = data.formFields?.find(f => f.id === fieldId);
+            const fieldLabel = field?.label || fieldId;
+            
             results.push({
               id: doc.id,
               ...data,
+              formFields: data.formFields || [],
               metadata: {
                 ...data.metadata,
                 submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
               },
-              matchField: fieldId,
+              matchField: fieldLabel,
               matchValue: value.join(', ')
             });
             break;

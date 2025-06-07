@@ -1,9 +1,11 @@
 import { SUBMISSION_CONSTANTS } from './constants';
 
-// Format submission data for display (simplified - no status/flags)
-export const formatSubmissionData = (submission, formFields = []) => {
+// Enhanced format submission data for display (using stored formFields)
+export const formatSubmissionData = (submission, fallbackFormFields = []) => {
   if (!submission) return null;
 
+  // Use stored formFields from submission, fallback to passed formFields if available
+  const formFields = submission.formFields || fallbackFormFields || [];
   const formattedData = {};
   
   // Create a map of field IDs to field configs for quick lookup
@@ -17,6 +19,7 @@ export const formatSubmissionData = (submission, formFields = []) => {
     const field = fieldMap[fieldId];
     
     if (!field) {
+      // Fallback for legacy submissions without stored fields
       formattedData[fieldId] = {
         label: fieldId,
         value: value,
@@ -37,11 +40,13 @@ export const formatSubmissionData = (submission, formFields = []) => {
 
   return {
     ...submission,
-    formattedData
+    formattedData,
+    // Ensure formFields is always available
+    formFields: formFields
   };
 };
 
-// Format individual field value based on field type
+// Enhanced format individual field value based on field type
 export const formatFieldValue = (value, field) => {
   if (value === null || value === undefined || value === '') {
     return '-';
@@ -88,7 +93,7 @@ export const formatFieldValue = (value, field) => {
   }
 };
 
-// Filter submissions based on simplified criteria (no status/flags)
+// Enhanced filter submissions based on simplified criteria (with stored field support)
 export const filterSubmissions = (submissions, filters) => {
   if (!submissions || submissions.length === 0) return [];
 
@@ -98,18 +103,26 @@ export const filterSubmissions = (submissions, filters) => {
   if (filters.dateRange) {
     const { start, end } = getDateRange(filters.dateRange);
     filtered = filtered.filter(submission => {
-      const submissionDate = new Date(submission.submittedAt);
+      const submissionDate = new Date(submission.submittedAt || submission.metadata?.submittedAt);
       return submissionDate >= start && submissionDate <= end;
     });
   }
 
-  // Filter by search term
+  // Enhanced search term filtering using stored field labels
   if (filters.searchTerm && filters.searchTerm.trim()) {
     const searchTerm = filters.searchTerm.toLowerCase().trim();
     filtered = filtered.filter(submission => {
       // Search in form title
       if (submission.formTitle?.toLowerCase().includes(searchTerm)) {
         return true;
+      }
+      
+      // Search in field labels (NEW: using stored formFields)
+      if (submission.formFields && Array.isArray(submission.formFields)) {
+        const labelMatch = submission.formFields.some(field => 
+          field.label?.toLowerCase().includes(searchTerm)
+        );
+        if (labelMatch) return true;
       }
       
       // Search in submission data
@@ -148,8 +161,8 @@ export const sortSubmissions = (submissions, sortBy, sortOrder = 'desc') => {
 
     switch (sortBy) {
       case 'submittedAt':
-        aValue = new Date(a.submittedAt);
-        bValue = new Date(b.submittedAt);
+        aValue = new Date(a.submittedAt || a.metadata?.submittedAt);
+        bValue = new Date(b.submittedAt || b.metadata?.submittedAt);
         break;
         
       case 'formTitle':
@@ -289,7 +302,7 @@ export const formatDate = (date, format = 'medium') => {
   return dateObj.toLocaleDateString('en-US', options[format] || options.medium);
 };
 
-// Calculate simplified submission statistics (no status/flags)
+// Enhanced calculation of submission statistics (with field analysis)
 export const calculateSubmissionStats = (submissions) => {
   if (!submissions || submissions.length === 0) {
     return {
@@ -297,7 +310,8 @@ export const calculateSubmissionStats = (submissions) => {
       today: 0,
       thisWeek: 0,
       thisMonth: 0,
-      byForm: {}
+      byForm: {},
+      fieldUsage: {} // NEW: Field usage statistics
     };
   }
 
@@ -311,11 +325,12 @@ export const calculateSubmissionStats = (submissions) => {
     today: 0,
     thisWeek: 0,
     thisMonth: 0,
-    byForm: {}
+    byForm: {},
+    fieldUsage: {} // NEW: Track field usage across submissions
   };
 
   submissions.forEach(submission => {
-    const submissionDate = new Date(submission.submittedAt);
+    const submissionDate = new Date(submission.submittedAt || submission.metadata?.submittedAt);
 
     // Count by form
     const formId = submission.formId;
@@ -339,6 +354,39 @@ export const calculateSubmissionStats = (submissions) => {
     if (submissionDate >= monthAgo) {
       stats.thisMonth++;
     }
+
+    // NEW: Analyze field usage using stored formFields
+    if (submission.formFields && Array.isArray(submission.formFields)) {
+      submission.formFields.forEach(field => {
+        if (!stats.fieldUsage[field.id]) {
+          stats.fieldUsage[field.id] = {
+            label: field.label,
+            type: field.type,
+            totalOccurrences: 0,
+            filledResponses: 0,
+            emptyResponses: 0,
+            responseRate: 0
+          };
+        }
+        
+        stats.fieldUsage[field.id].totalOccurrences++;
+        
+        // Check if field has a response in this submission
+        const fieldValue = submission.data?.[field.id];
+        const hasValue = fieldValue !== null && fieldValue !== undefined && fieldValue !== '' && 
+                         (!Array.isArray(fieldValue) || fieldValue.length > 0);
+        
+        if (hasValue) {
+          stats.fieldUsage[field.id].filledResponses++;
+        } else {
+          stats.fieldUsage[field.id].emptyResponses++;
+        }
+        
+        // Calculate response rate
+        stats.fieldUsage[field.id].responseRate = 
+          Math.round((stats.fieldUsage[field.id].filledResponses / stats.fieldUsage[field.id].totalOccurrences) * 100);
+      });
+    }
   });
 
   return stats;
@@ -361,17 +409,24 @@ export const validateSubmissionData = (submission) => {
     errors.push('Submission data must be an object');
   }
 
-  if (!submission.submittedAt) {
+  if (!submission.submittedAt && !submission.metadata?.submittedAt) {
     errors.push('Submission date is required');
+  }
+
+  // NEW: Validate formFields if present
+  if (submission.formFields && !Array.isArray(submission.formFields)) {
+    errors.push('Form fields must be an array');
   }
 
   return errors;
 };
 
-// Generate submission summary text
-export const generateSubmissionSummary = (submission, formFields = []) => {
-  if (!submission || !submission.data) return '';
+// Enhanced generate submission summary text (using stored field labels)
+export const generateSubmissionSummary = (submission, fallbackFormFields = []) => {
+  if (!submission || !submission.data) return 'No data available';
 
+  // Use stored formFields from submission, fallback to passed formFields
+  const formFields = submission.formFields || fallbackFormFields || [];
   const fieldMap = formFields.reduce((map, field) => {
     map[field.id] = field;
     return map;
@@ -381,18 +436,20 @@ export const generateSubmissionSummary = (submission, formFields = []) => {
 
   Object.entries(submission.data).forEach(([fieldId, value]) => {
     const field = fieldMap[fieldId];
-    if (field && value !== null && value !== undefined && value !== '') {
-      const formattedValue = formatFieldValue(value, field);
+    if (value !== null && value !== undefined && value !== '') {
+      const label = field ? field.label : fieldId; // Use proper label or fallback to ID
+      const formattedValue = field ? formatFieldValue(value, field) : String(value);
+      
       if (formattedValue !== '-') {
-        summaryParts.push(`${field.label}: ${formattedValue}`);
+        summaryParts.push(`${label}: ${formattedValue}`);
       }
     }
   });
 
-  return summaryParts.slice(0, 3).join(' | ');
+  return summaryParts.slice(0, 3).join(' | ') || 'Form data available';
 };
 
-// Export utility functions
+// Enhanced export utility functions
 export const getSubmissionUrl = (submissionId) => {
   return `/submissions/${submissionId}`;
 };
@@ -419,4 +476,84 @@ export const getSubmissionAge = (submittedAt) => {
   if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
   if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
   return `${Math.floor(diffDays / 365)} years ago`;
+};
+
+// NEW: Enhanced field analysis functions
+export const getFieldResponseRate = (submissions, fieldId) => {
+  if (!submissions || submissions.length === 0) return 0;
+  
+  let totalWithField = 0;
+  let filledResponses = 0;
+  
+  submissions.forEach(submission => {
+    // Check if this submission includes the field
+    const hasField = submission.formFields?.some(field => field.id === fieldId);
+    if (hasField) {
+      totalWithField++;
+      const value = submission.data?.[fieldId];
+      const hasValue = value !== null && value !== undefined && value !== '' && 
+                      (!Array.isArray(value) || value.length > 0);
+      if (hasValue) {
+        filledResponses++;
+      }
+    }
+  });
+  
+  return totalWithField > 0 ? Math.round((filledResponses / totalWithField) * 100) : 0;
+};
+
+export const getFieldValueDistribution = (submissions, fieldId) => {
+  const distribution = {};
+  let totalResponses = 0;
+  
+  submissions.forEach(submission => {
+    const value = submission.data?.[fieldId];
+    if (value !== null && value !== undefined && value !== '') {
+      totalResponses++;
+      
+      if (Array.isArray(value)) {
+        // Handle checkbox values
+        value.forEach(item => {
+          distribution[item] = (distribution[item] || 0) + 1;
+        });
+      } else {
+        const stringValue = String(value);
+        distribution[stringValue] = (distribution[stringValue] || 0) + 1;
+      }
+    }
+  });
+  
+  // Convert to percentages
+  Object.keys(distribution).forEach(key => {
+    distribution[key] = {
+      count: distribution[key],
+      percentage: totalResponses > 0 ? Math.round((distribution[key] / totalResponses) * 100) : 0
+    };
+  });
+  
+  return { distribution, totalResponses };
+};
+
+export const getMostUsedFields = (submissions, limit = 10) => {
+  const fieldUsage = {};
+  
+  submissions.forEach(submission => {
+    if (submission.formFields) {
+      submission.formFields.forEach(field => {
+        if (!fieldUsage[field.id]) {
+          fieldUsage[field.id] = {
+            id: field.id,
+            label: field.label,
+            type: field.type,
+            count: 0
+          };
+        }
+        fieldUsage[field.id].count++;
+      });
+    }
+  });
+  
+  return Object.values(fieldUsage)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 };

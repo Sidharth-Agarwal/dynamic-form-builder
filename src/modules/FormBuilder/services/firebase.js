@@ -129,12 +129,12 @@ export const getFormFromFirestore = async (db, formId) => {
 
 // ===== ENHANCED FORM OPERATIONS WITH SUBMISSION SUPPORT =====
 
-// Get form with submission statistics (simplified - no status/flags)
+// Enhanced form with submission statistics using stored field data
 export const getFormWithStatsFromFirestore = async (db, formId) => {
   try {
     const form = await getFormFromFirestore(db, formId);
     
-    // Get submission count and basic stats
+    // Get submission count and enhanced stats
     const submissionsQuery = query(
       collection(db, 'form_submissions'),
       where('formId', '==', formId)
@@ -143,12 +143,21 @@ export const getFormWithStatsFromFirestore = async (db, formId) => {
     const submissionsSnapshot = await getDocs(submissionsQuery);
     const submissionCount = submissionsSnapshot.size;
     
-    // Calculate simplified submission stats (no status/flags)
+    // Enhanced submission stats with field analysis
     const timeStats = {
       total: submissionCount,
       today: 0,
       thisWeek: 0,
       thisMonth: 0
+    };
+
+    // NEW: Field-level analytics
+    const fieldStats = {
+      enhancedSubmissions: 0,
+      legacySubmissions: 0,
+      fieldUsage: {},
+      fieldResponseRates: {},
+      totalFieldDefinitions: 0
     };
 
     const now = new Date();
@@ -160,9 +169,52 @@ export const getFormWithStatsFromFirestore = async (db, formId) => {
       const data = doc.data();
       const submittedAt = data.metadata?.submittedAt?.toDate() || new Date();
       
+      // Time-based stats
       if (submittedAt >= today) timeStats.today++;
       if (submittedAt >= weekAgo) timeStats.thisWeek++;
       if (submittedAt >= monthAgo) timeStats.thisMonth++;
+
+      // NEW: Enhanced field analysis
+      if (data.formFields && Array.isArray(data.formFields) && data.formFields.length > 0) {
+        fieldStats.enhancedSubmissions++;
+        fieldStats.totalFieldDefinitions += data.formFields.length;
+
+        // Analyze each field
+        data.formFields.forEach(field => {
+          if (!fieldStats.fieldUsage[field.id]) {
+            fieldStats.fieldUsage[field.id] = {
+              label: field.label,
+              type: field.type,
+              occurrences: 0,
+              responses: 0,
+              emptyResponses: 0
+            };
+          }
+
+          fieldStats.fieldUsage[field.id].occurrences++;
+
+          // Check if this field has a response
+          const fieldValue = data.data?.[field.id];
+          const hasResponse = fieldValue !== null && fieldValue !== undefined && fieldValue !== '' &&
+                              (!Array.isArray(fieldValue) || fieldValue.length > 0);
+
+          if (hasResponse) {
+            fieldStats.fieldUsage[field.id].responses++;
+          } else {
+            fieldStats.fieldUsage[field.id].emptyResponses++;
+          }
+        });
+      } else {
+        fieldStats.legacySubmissions++;
+      }
+    });
+
+    // Calculate response rates
+    Object.keys(fieldStats.fieldUsage).forEach(fieldId => {
+      const field = fieldStats.fieldUsage[fieldId];
+      fieldStats.fieldResponseRates[fieldId] = field.occurrences > 0 
+        ? Math.round((field.responses / field.occurrences) * 100)
+        : 0;
     });
     
     return {
@@ -170,22 +222,26 @@ export const getFormWithStatsFromFirestore = async (db, formId) => {
       submissionCount,
       submissionStats: {
         ...timeStats,
-        lastSubmission: submissionCount > 0 ? new Date() : null // Simplified
-      }
+        lastSubmission: submissionCount > 0 ? new Date() : null,
+        enhancementRate: submissionCount > 0 
+          ? Math.round((fieldStats.enhancedSubmissions / submissionCount) * 100) 
+          : 0
+      },
+      fieldAnalytics: fieldStats
     };
   } catch (error) {
-    console.error('Error fetching form with stats:', error);
-    throw new Error(`Failed to fetch form with stats: ${error.message}`);
+    console.error('Error fetching form with enhanced stats:', error);
+    throw new Error(`Failed to fetch form with enhanced stats: ${error.message}`);
   }
 };
 
-// Get all forms with submission counts
+// Enhanced get all forms with submission counts and field analytics
 export const getFormsWithStatsFromFirestore = async (db, userId = null) => {
   try {
     const forms = await getFormsFromFirestore(db, userId);
     
-    // Get submission counts for all forms in batch
-    const formsWithStats = await Promise.all(
+    // Get enhanced submission counts and field analytics for all forms
+    const formsWithEnhancedStats = await Promise.all(
       forms.map(async (form) => {
         try {
           const submissionsQuery = query(
@@ -194,25 +250,47 @@ export const getFormsWithStatsFromFirestore = async (db, userId = null) => {
           );
           
           const submissionsSnapshot = await getDocs(submissionsQuery);
+          let enhancedCount = 0;
+          let totalFieldDefinitions = 0;
+
+          submissionsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.formFields && Array.isArray(data.formFields) && data.formFields.length > 0) {
+              enhancedCount++;
+              totalFieldDefinitions += data.formFields.length;
+            }
+          });
           
           return {
             ...form,
-            submissionCount: submissionsSnapshot.size
+            submissionCount: submissionsSnapshot.size,
+            enhancedSubmissions: enhancedCount,
+            legacySubmissions: submissionsSnapshot.size - enhancedCount,
+            enhancementRate: submissionsSnapshot.size > 0 
+              ? Math.round((enhancedCount / submissionsSnapshot.size) * 100) 
+              : 0,
+            avgFieldDefinitionsPerSubmission: enhancedCount > 0 
+              ? Math.round(totalFieldDefinitions / enhancedCount) 
+              : 0
           };
         } catch (error) {
-          console.error(`Error getting submission count for form ${form.id}:`, error);
+          console.error(`Error getting enhanced submission count for form ${form.id}:`, error);
           return {
             ...form,
-            submissionCount: 0
+            submissionCount: 0,
+            enhancedSubmissions: 0,
+            legacySubmissions: 0,
+            enhancementRate: 0,
+            avgFieldDefinitionsPerSubmission: 0
           };
         }
       })
     );
     
-    return formsWithStats;
+    return formsWithEnhancedStats;
   } catch (error) {
-    console.error('Error fetching forms with stats:', error);
-    throw new Error(`Failed to fetch forms with stats: ${error.message}`);
+    console.error('Error fetching forms with enhanced stats:', error);
+    throw new Error(`Failed to fetch forms with enhanced stats: ${error.message}`);
   }
 };
 
@@ -301,7 +379,7 @@ export const subscribeToForms = (db, callback, userId = null) => {
   }
 };
 
-// Subscribe to form and its submissions
+// Subscribe to form and its submissions with enhanced field analytics
 export const subscribeToFormWithSubmissions = (db, formId, callback) => {
   try {
     // Subscribe to form changes
@@ -316,7 +394,7 @@ export const subscribeToFormWithSubmissions = (db, formId, callback) => {
             updatedAt: formDoc.data().updatedAt?.toDate?.() || new Date()
           };
 
-          // Subscribe to submissions for this form
+          // Subscribe to submissions for this form with enhanced analytics
           const submissionsQuery = query(
             collection(db, 'form_submissions'),
             where('formId', '==', formId),
@@ -327,22 +405,65 @@ export const subscribeToFormWithSubmissions = (db, formId, callback) => {
             submissionsQuery,
             (submissionsSnapshot) => {
               const submissions = [];
+              let enhancedCount = 0;
+              const fieldAnalytics = {
+                totalFields: 0,
+                uniqueFields: new Set(),
+                fieldUsage: {}
+              };
+
               submissionsSnapshot.forEach((doc) => {
                 const data = doc.data();
-                submissions.push({
+                const submission = {
                   id: doc.id,
                   ...data,
+                  formFields: data.formFields || [], // Ensure formFields is always present
                   metadata: {
                     ...data.metadata,
                     submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
                   }
-                });
+                };
+
+                submissions.push(submission);
+
+                // Enhanced analytics
+                if (data.formFields && Array.isArray(data.formFields) && data.formFields.length > 0) {
+                  enhancedCount++;
+                  fieldAnalytics.totalFields += data.formFields.length;
+
+                  data.formFields.forEach(field => {
+                    fieldAnalytics.uniqueFields.add(field.id);
+                    
+                    if (!fieldAnalytics.fieldUsage[field.id]) {
+                      fieldAnalytics.fieldUsage[field.id] = {
+                        label: field.label,
+                        type: field.type,
+                        count: 0
+                      };
+                    }
+                    fieldAnalytics.fieldUsage[field.id].count++;
+                  });
+                }
               });
 
               callback({
                 form: formData,
                 submissions,
-                submissionCount: submissions.length
+                submissionCount: submissions.length,
+                analytics: {
+                  enhancedSubmissions: enhancedCount,
+                  legacySubmissions: submissions.length - enhancedCount,
+                  enhancementRate: submissions.length > 0 
+                    ? Math.round((enhancedCount / submissions.length) * 100) 
+                    : 0,
+                  fieldAnalytics: {
+                    ...fieldAnalytics,
+                    uniqueFieldCount: fieldAnalytics.uniqueFields.size,
+                    avgFieldsPerSubmission: enhancedCount > 0 
+                      ? Math.round(fieldAnalytics.totalFields / enhancedCount) 
+                      : 0
+                  }
+                }
               });
             }
           );
@@ -358,13 +479,14 @@ export const subscribeToFormWithSubmissions = (db, formId, callback) => {
 
     return formUnsubscribe;
   } catch (error) {
-    console.error('Error setting up form with submissions subscription:', error);
+    console.error('Error setting up enhanced form with submissions subscription:', error);
     throw error;
   }
 };
 
-// ===== ANALYTICS OPERATIONS (Simplified - No Status/Flags) =====
+// ===== ENHANCED ANALYTICS OPERATIONS =====
 
+// Enhanced form analytics with comprehensive field analysis
 export const getFormAnalytics = async (db, formId) => {
   try {
     // Get form data
@@ -384,6 +506,7 @@ export const getFormAnalytics = async (db, formId) => {
       submissions.push({
         id: doc.id,
         ...data,
+        formFields: data.formFields || [], // Ensure formFields is always present
         metadata: {
           ...data.metadata,
           submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
@@ -391,7 +514,7 @@ export const getFormAnalytics = async (db, formId) => {
       });
     });
 
-    // Calculate simplified analytics (no status/flags)
+    // Enhanced analytics with field-level insights
     const analytics = {
       form: {
         id: form.id,
@@ -400,18 +523,29 @@ export const getFormAnalytics = async (db, formId) => {
       },
       submissions: {
         total: submissions.length,
+        enhanced: 0,
+        legacy: 0,
+        enhancementRate: 0,
         byDate: {},
         recentActivity: []
       },
-      performance: {
-        averageCompletionTime: null,
-        abandonmentRate: null,
-        conversionRate: null
+      fieldAnalytics: {
+        totalFieldDefinitions: 0,
+        uniqueFields: new Set(),
+        fieldUsage: {},
+        responseRates: {},
+        fieldTypes: {},
+        mostUsedFields: [],
+        leastUsedFields: []
       },
-      fieldAnalytics: {}
+      dataQuality: {
+        completenessScore: 0,
+        consistencyScore: 0,
+        recommendations: []
+      }
     };
 
-    // Process submission analytics
+    // Process enhanced submission analytics
     submissions.forEach(submission => {
       const submittedAt = submission.metadata.submittedAt;
       const dateKey = submittedAt.toISOString().split('T')[0];
@@ -423,73 +557,155 @@ export const getFormAnalytics = async (db, formId) => {
       if (analytics.submissions.recentActivity.length < 10) {
         analytics.submissions.recentActivity.push({
           id: submission.id,
-          submittedAt: submittedAt
+          submittedAt: submittedAt,
+          hasStoredFields: !!(submission.formFields && submission.formFields.length > 0)
         });
       }
+
+      // Enhanced field analytics
+      if (submission.formFields && submission.formFields.length > 0) {
+        analytics.submissions.enhanced++;
+        analytics.fieldAnalytics.totalFieldDefinitions += submission.formFields.length;
+
+        submission.formFields.forEach(field => {
+          analytics.fieldAnalytics.uniqueFields.add(field.id);
+          
+          // Field usage tracking
+          if (!analytics.fieldAnalytics.fieldUsage[field.id]) {
+            analytics.fieldAnalytics.fieldUsage[field.id] = {
+              label: field.label,
+              type: field.type,
+              required: field.required || false,
+              occurrences: 0,
+              responses: 0,
+              emptyResponses: 0,
+              uniqueValues: new Set()
+            };
+          }
+
+          const fieldUsage = analytics.fieldAnalytics.fieldUsage[field.id];
+          fieldUsage.occurrences++;
+
+          // Field type breakdown
+          analytics.fieldAnalytics.fieldTypes[field.type] = 
+            (analytics.fieldAnalytics.fieldTypes[field.type] || 0) + 1;
+
+          // Response analysis
+          const fieldValue = submission.data?.[field.id];
+          const hasValue = fieldValue !== null && fieldValue !== undefined && fieldValue !== '' &&
+                           (!Array.isArray(fieldValue) || fieldValue.length > 0);
+
+          if (hasValue) {
+            fieldUsage.responses++;
+            
+            // Track unique values (limited to prevent memory issues)
+            if (fieldUsage.uniqueValues.size < 50) {
+              const valueStr = Array.isArray(fieldValue) 
+                ? fieldValue.join(', ') 
+                : String(fieldValue);
+              fieldUsage.uniqueValues.add(valueStr);
+            }
+          } else {
+            fieldUsage.emptyResponses++;
+          }
+        });
+      } else {
+        analytics.submissions.legacy++;
+      }
     });
+
+    // Calculate enhancement rate
+    analytics.submissions.enhancementRate = analytics.submissions.total > 0 
+      ? Math.round((analytics.submissions.enhanced / analytics.submissions.total) * 100) 
+      : 0;
 
     // Sort recent activity by date
     analytics.submissions.recentActivity.sort((a, b) => b.submittedAt - a.submittedAt);
 
-    // Field-level analytics
-    if (form.fields) {
-      form.fields.forEach(field => {
-        analytics.fieldAnalytics[field.id] = {
-          label: field.label,
-          type: field.type,
-          required: field.required || false,
-          responses: 0,
-          emptyResponses: 0,
-          uniqueValues: new Set()
-        };
-      });
+    // Calculate response rates and identify most/least used fields
+    const fieldUsageArray = Object.entries(analytics.fieldAnalytics.fieldUsage).map(([fieldId, usage]) => {
+      const responseRate = usage.occurrences > 0 
+        ? Math.round((usage.responses / usage.occurrences) * 100) 
+        : 0;
+      
+      analytics.fieldAnalytics.responseRates[fieldId] = responseRate;
+      
+      return {
+        fieldId,
+        ...usage,
+        responseRate,
+        uniqueValueCount: usage.uniqueValues.size,
+        uniqueValues: Array.from(usage.uniqueValues).slice(0, 10) // Keep only first 10 for display
+      };
+    });
 
-      // Process field responses
-      submissions.forEach(submission => {
-        if (submission.data) {
-          Object.entries(submission.data).forEach(([fieldId, value]) => {
-            if (analytics.fieldAnalytics[fieldId]) {
-              analytics.fieldAnalytics[fieldId].responses++;
-              
-              if (value === null || value === undefined || value === '' || 
-                  (Array.isArray(value) && value.length === 0)) {
-                analytics.fieldAnalytics[fieldId].emptyResponses++;
-              } else {
-                const valueStr = Array.isArray(value) ? value.join(', ') : String(value);
-                if (analytics.fieldAnalytics[fieldId].uniqueValues.size < 50) {
-                  analytics.fieldAnalytics[fieldId].uniqueValues.add(valueStr);
-                }
-              }
-            }
-          });
-        }
-      });
+    // Remove Sets for JSON serialization and sort by usage
+    fieldUsageArray.forEach(field => {
+      delete analytics.fieldAnalytics.fieldUsage[field.fieldId].uniqueValues;
+      analytics.fieldAnalytics.fieldUsage[field.fieldId] = {
+        ...analytics.fieldAnalytics.fieldUsage[field.fieldId],
+        responseRate: field.responseRate,
+        uniqueValueCount: field.uniqueValueCount,
+        topValues: field.uniqueValues
+      };
+    });
 
-      // Convert Sets to counts and calculate response rates
-      Object.keys(analytics.fieldAnalytics).forEach(fieldId => {
-        const fieldAnalytics = analytics.fieldAnalytics[fieldId];
-        fieldAnalytics.uniqueValueCount = fieldAnalytics.uniqueValues.size;
-        fieldAnalytics.uniqueValues = Array.from(fieldAnalytics.uniqueValues).slice(0, 10);
-        fieldAnalytics.responseRate = fieldAnalytics.responses > 0 
-          ? ((fieldAnalytics.responses - fieldAnalytics.emptyResponses) / fieldAnalytics.responses * 100).toFixed(1) + '%'
-          : '0%';
-      });
+    // Most and least used fields
+    const sortedByUsage = fieldUsageArray.sort((a, b) => b.occurrences - a.occurrences);
+    analytics.fieldAnalytics.mostUsedFields = sortedByUsage.slice(0, 5);
+    analytics.fieldAnalytics.leastUsedFields = sortedByUsage.slice(-5).reverse();
+
+    // Data quality analysis
+    const totalPossibleResponses = analytics.submissions.enhanced * analytics.fieldAnalytics.uniqueFields.size;
+    const totalActualResponses = Object.values(analytics.fieldAnalytics.fieldUsage)
+      .reduce((sum, field) => sum + field.responses, 0);
+
+    analytics.dataQuality.completenessScore = totalPossibleResponses > 0 
+      ? Math.round((totalActualResponses / totalPossibleResponses) * 100) 
+      : 0;
+
+    analytics.dataQuality.consistencyScore = analytics.submissions.enhancementRate;
+
+    // Generate recommendations
+    if (analytics.submissions.legacy > 0) {
+      analytics.dataQuality.recommendations.push(
+        `${analytics.submissions.legacy} submissions lack field definitions. Consider migrating to enhanced format.`
+      );
     }
+
+    if (analytics.dataQuality.completenessScore < 70) {
+      analytics.dataQuality.recommendations.push(
+        'Low completion rate detected. Consider making key fields required or improving form UX.'
+      );
+    }
+
+    if (analytics.fieldAnalytics.leastUsedFields.length > 0) {
+      const unusedFields = analytics.fieldAnalytics.leastUsedFields.filter(f => f.responseRate < 20);
+      if (unusedFields.length > 0) {
+        analytics.dataQuality.recommendations.push(
+          `${unusedFields.length} fields have very low response rates. Consider removing or making them optional.`
+        );
+      }
+    }
+
+    // Convert Set to count
+    analytics.fieldAnalytics.uniqueFieldCount = analytics.fieldAnalytics.uniqueFields.size;
+    delete analytics.fieldAnalytics.uniqueFields;
 
     return analytics;
   } catch (error) {
-    console.error('Error getting form analytics:', error);
-    throw new Error(`Failed to get form analytics: ${error.message}`);
+    console.error('Error getting enhanced form analytics:', error);
+    throw new Error(`Failed to get enhanced form analytics: ${error.message}`);
   }
 };
 
-// Get dashboard analytics (simplified - no status/flags)
+// Enhanced dashboard analytics with comprehensive field insights
 export const getDashboardAnalytics = async (db, userId = null) => {
   try {
     // Get all forms
     const forms = await getFormsFromFirestore(db, userId);
     
-    // Get all submissions
+    // Get all submissions with enhanced field analysis
     let submissionsQuery = collection(db, 'form_submissions');
     if (userId && userId !== 'anonymous') {
       // Filter submissions by forms created by this user
@@ -507,6 +723,7 @@ export const getDashboardAnalytics = async (db, userId = null) => {
       submissions.push({
         id: doc.id,
         ...data,
+        formFields: data.formFields || [], // Ensure formFields is always present
         metadata: {
           ...data.metadata,
           submittedAt: data.metadata?.submittedAt?.toDate?.() || new Date()
@@ -514,7 +731,7 @@ export const getDashboardAnalytics = async (db, userId = null) => {
       });
     });
 
-    // Calculate simplified dashboard analytics (no status/flags)
+    // Enhanced dashboard analytics
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -524,34 +741,115 @@ export const getDashboardAnalytics = async (db, userId = null) => {
       overview: {
         totalForms: forms.length,
         totalSubmissions: submissions.length,
-        activeForms: forms.filter(form => {
-          const formSubmissions = submissions.filter(sub => sub.formId === form.id);
-          return formSubmissions.length > 0;
-        }).length
+        activeForms: 0,
+        enhancedSubmissions: 0,
+        legacySubmissions: 0,
+        enhancementRate: 0
       },
       timeStats: {
-        submissionsToday: submissions.filter(sub => sub.metadata.submittedAt >= today).length,
-        submissionsThisWeek: submissions.filter(sub => sub.metadata.submittedAt >= weekAgo).length,
-        submissionsThisMonth: submissions.filter(sub => sub.metadata.submittedAt >= monthAgo).length
+        submissionsToday: 0,
+        submissionsThisWeek: 0,
+        submissionsThisMonth: 0,
+        enhancedToday: 0,
+        enhancedThisWeek: 0,
+        enhancedThisMonth: 0
+      },
+      fieldAnalytics: {
+        totalFieldDefinitions: 0,
+        uniqueFields: new Set(),
+        fieldTypes: {},
+        avgFieldsPerForm: 0,
+        avgFieldsPerSubmission: 0
+      },
+      dataQuality: {
+        overallScore: 0,
+        recommendations: []
       },
       topForms: [],
       recentActivity: []
     };
 
-    // Calculate form performance
+    // Analyze submissions
+    submissions.forEach(submission => {
+      const submittedAt = submission.metadata.submittedAt;
+      
+      // Time-based stats
+      if (submittedAt >= today) {
+        analytics.timeStats.submissionsToday++;
+      }
+      if (submittedAt >= weekAgo) {
+        analytics.timeStats.submissionsThisWeek++;
+      }
+      if (submittedAt >= monthAgo) {
+        analytics.timeStats.submissionsThisMonth++;
+      }
+
+      // Enhanced vs legacy tracking
+      if (submission.formFields && submission.formFields.length > 0) {
+        analytics.overview.enhancedSubmissions++;
+        analytics.fieldAnalytics.totalFieldDefinitions += submission.formFields.length;
+        
+        // Enhanced time stats
+        if (submittedAt >= today) analytics.timeStats.enhancedToday++;
+        if (submittedAt >= weekAgo) analytics.timeStats.enhancedThisWeek++;
+        if (submittedAt >= monthAgo) analytics.timeStats.enhancedThisMonth++;
+
+        // Field analysis
+        submission.formFields.forEach(field => {
+          analytics.fieldAnalytics.uniqueFields.add(field.id);
+          analytics.fieldAnalytics.fieldTypes[field.type] = 
+            (analytics.fieldAnalytics.fieldTypes[field.type] || 0) + 1;
+        });
+      } else {
+        analytics.overview.legacySubmissions++;
+      }
+    });
+
+    // Calculate form performance with enhancement metrics
     const formStats = {};
     forms.forEach(form => {
       const formSubmissions = submissions.filter(sub => sub.formId === form.id);
+      const enhancedSubmissions = formSubmissions.filter(sub => 
+        sub.formFields && sub.formFields.length > 0
+      );
+      
       formStats[form.id] = {
         ...form,
         submissionCount: formSubmissions.length,
+        enhancedSubmissionCount: enhancedSubmissions.length,
+        enhancementRate: formSubmissions.length > 0 
+          ? Math.round((enhancedSubmissions.length / formSubmissions.length) * 100) 
+          : 0,
         lastSubmission: formSubmissions.length > 0 
           ? Math.max(...formSubmissions.map(sub => sub.metadata.submittedAt.getTime()))
-          : null
+          : null,
+        avgFieldsPerSubmission: enhancedSubmissions.length > 0
+          ? Math.round(enhancedSubmissions.reduce((sum, sub) => sum + sub.formFields.length, 0) / enhancedSubmissions.length)
+          : 0
       };
     });
 
-    // Top forms by submission count
+    // Active forms (forms with submissions)
+    analytics.overview.activeForms = Object.values(formStats).filter(form => form.submissionCount > 0).length;
+
+    // Enhancement rate
+    analytics.overview.enhancementRate = analytics.overview.totalSubmissions > 0 
+      ? Math.round((analytics.overview.enhancedSubmissions / analytics.overview.totalSubmissions) * 100) 
+      : 0;
+
+    // Field analytics calculations
+    analytics.fieldAnalytics.uniqueFieldCount = analytics.fieldAnalytics.uniqueFields.size;
+    analytics.fieldAnalytics.avgFieldsPerForm = forms.length > 0 
+      ? Math.round(forms.reduce((sum, form) => sum + (form.fields?.length || 0), 0) / forms.length) 
+      : 0;
+    analytics.fieldAnalytics.avgFieldsPerSubmission = analytics.overview.enhancedSubmissions > 0
+      ? Math.round(analytics.fieldAnalytics.totalFieldDefinitions / analytics.overview.enhancedSubmissions)
+      : 0;
+
+    // Remove Set for JSON serialization
+    delete analytics.fieldAnalytics.uniqueFields;
+
+    // Top forms by submission count with enhancement metrics
     analytics.topForms = Object.values(formStats)
       .sort((a, b) => b.submissionCount - a.submissionCount)
       .slice(0, 5)
@@ -559,10 +857,13 @@ export const getDashboardAnalytics = async (db, userId = null) => {
         id: form.id,
         title: form.title,
         submissionCount: form.submissionCount,
+        enhancedSubmissionCount: form.enhancedSubmissionCount,
+        enhancementRate: form.enhancementRate,
+        avgFieldsPerSubmission: form.avgFieldsPerSubmission,
         lastSubmission: form.lastSubmission ? new Date(form.lastSubmission) : null
       }));
 
-    // Recent activity (last 10 submissions across all forms)
+    // Recent activity (last 10 submissions across all forms) with enhancement info
     analytics.recentActivity = submissions
       .sort((a, b) => b.metadata.submittedAt - a.metadata.submittedAt)
       .slice(0, 10)
@@ -570,19 +871,188 @@ export const getDashboardAnalytics = async (db, userId = null) => {
         id: submission.id,
         formId: submission.formId,
         formTitle: submission.formTitle,
-        submittedAt: submission.metadata.submittedAt
+        submittedAt: submission.metadata.submittedAt,
+        hasStoredFields: !!(submission.formFields && submission.formFields.length > 0),
+        fieldCount: submission.formFields ? submission.formFields.length : 0
       }));
+
+    // Data quality analysis
+    analytics.dataQuality.overallScore = Math.round(
+      (analytics.overview.enhancementRate * 0.6) + // 60% weight on enhancement rate
+      (analytics.overview.activeForms / analytics.overview.totalForms * 100 * 0.4) // 40% weight on form activity
+    );
+
+    // Generate recommendations
+    if (analytics.overview.enhancementRate < 50) {
+      analytics.dataQuality.recommendations.push(
+        'Less than 50% of submissions use enhanced format. Update forms to include field definitions.'
+      );
+    }
+
+    if (analytics.overview.legacySubmissions > analytics.overview.enhancedSubmissions) {
+      analytics.dataQuality.recommendations.push(
+        'More legacy submissions than enhanced ones. Consider migrating older forms.'
+      );
+    }
+
+    if (analytics.fieldAnalytics.uniqueFieldCount < analytics.overview.totalForms * 3) {
+      analytics.dataQuality.recommendations.push(
+        'Low field diversity detected. Consider expanding form complexity for better data collection.'
+      );
+    }
+
+    if (analytics.overview.activeForms / analytics.overview.totalForms < 0.5) {
+      analytics.dataQuality.recommendations.push(
+        'Many forms have no submissions. Consider promoting or archiving unused forms.'
+      );
+    }
 
     return analytics;
   } catch (error) {
-    console.error('Error getting dashboard analytics:', error);
-    throw new Error(`Failed to get dashboard analytics: ${error.message}`);
+    console.error('Error getting enhanced dashboard analytics:', error);
+    throw new Error(`Failed to get enhanced dashboard analytics: ${error.message}`);
   }
 };
 
-// ===== MAINTENANCE OPERATIONS =====
+// ===== NEW: FIELD-SPECIFIC ANALYTICS =====
 
-// Clean up orphaned submissions (submissions without corresponding forms)
+// Get comprehensive field analytics across all forms
+export const getFieldAnalytics = async (db, userId = null) => {
+  try {
+    // Get all submissions with field data
+    let submissionsQuery = collection(db, 'form_submissions');
+    if (userId && userId !== 'anonymous') {
+      const forms = await getFormsFromFirestore(db, userId);
+      const formIds = forms.map(form => form.id);
+      if (formIds.length > 0) {
+        submissionsQuery = query(submissionsQuery, where('formId', 'in', formIds.slice(0, 10)));
+      }
+    }
+
+    const submissionsSnapshot = await getDocs(submissionsQuery);
+    const fieldAnalytics = {
+      totalSubmissions: submissionsSnapshot.size,
+      enhancedSubmissions: 0,
+      fields: {},
+      fieldTypes: {},
+      responsePatterns: {},
+      recommendations: []
+    };
+
+    submissionsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      if (data.formFields && Array.isArray(data.formFields) && data.formFields.length > 0) {
+        fieldAnalytics.enhancedSubmissions++;
+        
+        data.formFields.forEach(field => {
+          // Field-level analytics
+          if (!fieldAnalytics.fields[field.id]) {
+            fieldAnalytics.fields[field.id] = {
+              id: field.id,
+              label: field.label,
+              type: field.type,
+              required: field.required || false,
+              forms: new Set(),
+              totalOccurrences: 0,
+              responseCount: 0,
+              emptyCount: 0,
+              uniqueValues: new Set(),
+              valueDistribution: {}
+            };
+          }
+
+          const fieldData = fieldAnalytics.fields[field.id];
+          fieldData.forms.add(data.formId);
+          fieldData.totalOccurrences++;
+
+          // Type analytics
+          fieldAnalytics.fieldTypes[field.type] = (fieldAnalytics.fieldTypes[field.type] || 0) + 1;
+
+          // Response analysis
+          const value = data.data?.[field.id];
+          const hasValue = value !== null && value !== undefined && value !== '' &&
+                           (!Array.isArray(value) || value.length > 0);
+
+          if (hasValue) {
+            fieldData.responseCount++;
+            
+            // Value distribution (for choice fields)
+            if (['select', 'radio', 'checkbox'].includes(field.type)) {
+              const values = Array.isArray(value) ? value : [value];
+              values.forEach(v => {
+                const valueStr = String(v);
+                fieldData.valueDistribution[valueStr] = (fieldData.valueDistribution[valueStr] || 0) + 1;
+                if (fieldData.uniqueValues.size < 100) {
+                  fieldData.uniqueValues.add(valueStr);
+                }
+              });
+            }
+          } else {
+            fieldData.emptyCount++;
+          }
+        });
+      }
+    });
+
+    // Process field analytics
+    Object.keys(fieldAnalytics.fields).forEach(fieldId => {
+      const field = fieldAnalytics.fields[fieldId];
+      
+      // Convert Sets to arrays/counts
+      field.formsUsedIn = field.forms.size;
+      field.uniqueValueCount = field.uniqueValues.size;
+      field.responseRate = field.totalOccurrences > 0 
+        ? Math.round((field.responseCount / field.totalOccurrences) * 100) 
+        : 0;
+
+      // Clean up for JSON serialization
+      delete field.forms;
+      delete field.uniqueValues;
+
+      // Response patterns
+      if (field.responseRate < 30) {
+        fieldAnalytics.responsePatterns[fieldId] = 'low_response';
+      } else if (field.responseRate > 90) {
+        fieldAnalytics.responsePatterns[fieldId] = 'high_response';
+      } else {
+        fieldAnalytics.responsePatterns[fieldId] = 'normal_response';
+      }
+    });
+
+    // Generate field-specific recommendations
+    const lowResponseFields = Object.values(fieldAnalytics.fields).filter(f => f.responseRate < 30);
+    const highResponseFields = Object.values(fieldAnalytics.fields).filter(f => f.responseRate > 90);
+    const unusedFields = Object.values(fieldAnalytics.fields).filter(f => f.formsUsedIn === 1);
+
+    if (lowResponseFields.length > 0) {
+      fieldAnalytics.recommendations.push(
+        `${lowResponseFields.length} fields have low response rates. Consider making them optional or improving their clarity.`
+      );
+    }
+
+    if (unusedFields.length > 0) {
+      fieldAnalytics.recommendations.push(
+        `${unusedFields.length} fields are only used in one form. Consider reusing successful field patterns.`
+      );
+    }
+
+    if (Object.keys(fieldAnalytics.fieldTypes).length < 5) {
+      fieldAnalytics.recommendations.push(
+        'Limited field type diversity. Consider using more varied input types for better data collection.'
+      );
+    }
+
+    return fieldAnalytics;
+  } catch (error) {
+    console.error('Error getting field analytics:', error);
+    throw new Error(`Failed to get field analytics: ${error.message}`);
+  }
+};
+
+// ===== MAINTENANCE OPERATIONS (Enhanced) =====
+
+// Enhanced cleanup with field data validation
 export const cleanupOrphanedSubmissions = async (db) => {
   try {
     const formsSnapshot = await getDocs(collection(db, 'forms'));
@@ -591,28 +1061,47 @@ export const cleanupOrphanedSubmissions = async (db) => {
 
     const submissionsSnapshot = await getDocs(collection(db, 'form_submissions'));
     const orphanedSubmissions = [];
+    const invalidFieldData = [];
     
     submissionsSnapshot.forEach(doc => {
       const data = doc.data();
+      
+      // Check for orphaned submissions
       if (!formIds.has(data.formId)) {
         orphanedSubmissions.push(doc.id);
       }
+      
+      // Check for invalid field data
+      if (data.formFields && !Array.isArray(data.formFields)) {
+        invalidFieldData.push(doc.id);
+      }
     });
 
-    // Delete orphaned submissions
+    // Clean up orphaned submissions
     for (const submissionId of orphanedSubmissions) {
       await deleteDoc(doc(db, 'form_submissions', submissionId));
     }
 
-    console.log(`Cleaned up ${orphanedSubmissions.length} orphaned submissions`);
-    return { cleanedUp: orphanedSubmissions.length };
+    // Fix invalid field data
+    for (const submissionId of invalidFieldData) {
+      await updateDoc(doc(db, 'form_submissions', submissionId), {
+        formFields: [],
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    console.log(`Cleaned up ${orphanedSubmissions.length} orphaned submissions and fixed ${invalidFieldData.length} invalid field data entries`);
+    return { 
+      orphanedSubmissions: orphanedSubmissions.length,
+      fixedFieldData: invalidFieldData.length
+    };
   } catch (error) {
-    console.error('Error cleaning up orphaned submissions:', error);
-    throw new Error(`Failed to cleanup orphaned submissions: ${error.message}`);
+    console.error('Error during enhanced cleanup:', error);
+    throw new Error(`Failed to perform enhanced cleanup: ${error.message}`);
   }
 };
 
-// Update form submission counts
+// Enhanced form submission count update with field analytics
 export const updateFormSubmissionCounts = async (db) => {
   try {
     const formsSnapshot = await getDocs(collection(db, 'forms'));
@@ -629,19 +1118,40 @@ export const updateFormSubmissionCounts = async (db) => {
       const submissionsSnapshot = await getDocs(submissionsQuery);
       const submissionCount = submissionsSnapshot.size;
       
+      // Enhanced metrics
+      let enhancedCount = 0;
+      let totalFieldDefinitions = 0;
+      
+      submissionsSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.formFields && Array.isArray(data.formFields) && data.formFields.length > 0) {
+          enhancedCount++;
+          totalFieldDefinitions += data.formFields.length;
+        }
+      });
+      
       await updateDoc(formDoc.ref, {
         submissionCount,
+        enhancedSubmissionCount: enhancedCount,
+        legacySubmissionCount: submissionCount - enhancedCount,
+        enhancementRate: submissionCount > 0 ? Math.round((enhancedCount / submissionCount) * 100) : 0,
+        avgFieldDefinitionsPerSubmission: enhancedCount > 0 ? Math.round(totalFieldDefinitions / enhancedCount) : 0,
         updatedAt: serverTimestamp()
       });
       
-      updates.push({ formId, submissionCount });
+      updates.push({ 
+        formId, 
+        submissionCount, 
+        enhancedCount, 
+        enhancementRate: submissionCount > 0 ? Math.round((enhancedCount / submissionCount) * 100) : 0
+      });
     }
 
-    console.log(`Updated submission counts for ${updates.length} forms`);
+    console.log(`Updated enhanced submission counts for ${updates.length} forms`);
     return updates;
   } catch (error) {
-    console.error('Error updating form submission counts:', error);
-    throw new Error(`Failed to update form submission counts: ${error.message}`);
+    console.error('Error updating enhanced form submission counts:', error);
+    throw new Error(`Failed to update enhanced form submission counts: ${error.message}`);
   }
 };
 
@@ -662,43 +1172,51 @@ export const saveSubmission = async (submissionData) => {
   return Promise.resolve({ id: `submission_${Date.now()}`, ...submissionData });
 };
 
-// ===== UTILITY FUNCTIONS =====
+// ===== UTILITY FUNCTIONS (Enhanced) =====
 
-// Test Firebase connection
+// Test Firebase connection with field data validation
 export const testFirebaseConnection = async (db) => {
   try {
     const testDoc = doc(db, 'test', 'connection');
     await updateDoc(testDoc, {
-      lastTest: serverTimestamp()
+      lastTest: serverTimestamp(),
+      enhancedFieldSupport: true
     });
-    return { success: true, timestamp: new Date() };
+    return { success: true, timestamp: new Date(), enhancedSupport: true };
   } catch (error) {
     console.error('Firebase connection test failed:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, enhancedSupport: false };
   }
 };
 
-// Get Firebase service status
+// Enhanced Firebase service status
 export const getFirebaseServiceStatus = async (db, storage, auth) => {
   const status = {
     firestore: false,
     storage: false,
     auth: false,
+    enhancedFieldSupport: false,
     overall: false
   };
 
   try {
-    // Test Firestore
-    await getDocs(query(collection(db, 'test'), orderBy('lastTest', 'desc')));
+    // Test Firestore with field data query
+    const testQuery = query(
+      collection(db, 'form_submissions'), 
+      orderBy('metadata.submittedAt', 'desc'),
+      limit(1)
+    );
+    await getDocs(testQuery);
     status.firestore = true;
+    status.enhancedFieldSupport = true;
   } catch (error) {
-    console.error('Firestore test failed:', error);
+    console.error('Firestore enhanced test failed:', error);
   }
 
   try {
-    // Test Storage (basic check)
+    // Test Storage
     if (storage) {
-      status.storage = true; // Basic check - storage is available
+      status.storage = true;
     }
   } catch (error) {
     console.error('Storage test failed:', error);
@@ -707,12 +1225,12 @@ export const getFirebaseServiceStatus = async (db, storage, auth) => {
   try {
     // Test Auth
     if (auth) {
-      status.auth = true; // Basic check - auth is available
+      status.auth = true;
     }
   } catch (error) {
     console.error('Auth test failed:', error);
   }
 
-  status.overall = status.firestore && status.storage && status.auth;
+  status.overall = status.firestore && status.storage && status.auth && status.enhancedFieldSupport;
   return status;
 };

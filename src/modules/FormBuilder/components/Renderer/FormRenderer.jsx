@@ -74,11 +74,15 @@ const FormRenderer = ({
         throw new Error('Database connection not available. Please check your Firebase configuration.');
       }
 
-      // Simplified submission data structure (no status/flags)
+      // Enhanced submission data structure with form fields
       const submissionData = {
         formId: form.id || 'local_form',
         formTitle: form.title,
         data: formData,
+        
+        // NEW: Include form fields for proper display later
+        formFields: form.fields || [],
+        
         metadata: {
           submittedBy: 'anonymous',
           userAgent: navigator?.userAgent || 'unknown',
@@ -87,9 +91,9 @@ const FormRenderer = ({
         }
       };
 
-      console.log('🚀 Submitting to Firebase:', submissionData);
+      console.log('🚀 Submitting to Firebase with field definitions:', submissionData);
 
-      // Save to Firebase using the simplified structure
+      // Save to Firebase using the enhanced structure
       const result = await saveSubmissionToFirestore(db, submissionData);
       
       console.log('✅ Firebase submission successful:', result);
@@ -227,6 +231,9 @@ const FormRenderer = ({
           <p>Fields marked with * are required</p>
           {db && (
             <p className="mt-1 text-green-600">✅ Connected to Firebase</p>
+          )}
+          {form.fields.length > 0 && (
+            <p className="mt-1 text-blue-600">📋 Form field definitions will be saved with submission</p>
           )}
         </div>
       </form>
