@@ -3,10 +3,6 @@ import {
   FileText, 
   Download, 
   Filter, 
-  Search, 
-  MoreVertical,
-  Eye,
-  Trash2,
   ArrowLeft,
   Calendar,
   BarChart3
@@ -16,7 +12,6 @@ import Button from '../Common/Button';
 import LoadingSpinner from '../Common/LoadingSpinner';
 import EmptyState, { NoSubmissionsState, NoFilteredResultsState } from '../Common/EmptyState';
 import SubmissionsList from './SubmissionsList';
-import SubmissionViewer from './SubmissionViewer';
 import SubmissionFilters from './SubmissionFilters';
 
 const SubmissionDashboard = ({ 
@@ -30,31 +25,21 @@ const SubmissionDashboard = ({
     loading,
     error,
     stats,
-    viewMode,
-    selectedSubmissionId,
     isEmpty,
     isFiltered,
     noFilteredResults,
-    hasSelection,
     canExport,
     totalCount,
     filteredCount,
-    selectedCount,
     
     // Actions
-    setViewMode,
-    goToSubmissionsList,
     exportSubmissions,
-    exportSelected,
     clearFilters,
-    clearSelection,
-    clearError,
-    bulkDelete
+    clearError
   } = useSubmissionsContext();
 
   const [showFilters, setShowFilters] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showBulkActions, setShowBulkActions] = useState(false);
 
   // Handle export
   const handleExport = async (format) => {
@@ -63,29 +48,6 @@ const SubmissionDashboard = ({
       setShowExportMenu(false);
     } catch (error) {
       console.error('Export failed:', error);
-    }
-  };
-
-  // Handle bulk actions
-  const handleBulkDelete = async () => {
-    if (window.confirm(`Delete ${selectedCount} selected submissions? This action cannot be undone.`)) {
-      try {
-        await bulkDelete();
-        clearSelection();
-        setShowBulkActions(false);
-      } catch (error) {
-        console.error('Bulk delete failed:', error);
-      }
-    }
-  };
-
-  // Handle bulk export
-  const handleBulkExport = async (format) => {
-    try {
-      await exportSelected(format);
-      setShowBulkActions(false);
-    } catch (error) {
-      console.error('Bulk export failed:', error);
     }
   };
 
@@ -115,11 +77,6 @@ const SubmissionDashboard = ({
                 <span className="text-sm text-gray-500">
                   {isFiltered ? `${filteredCount} of ${totalCount}` : `${totalCount}`} submission{totalCount !== 1 ? 's' : ''}
                 </span>
-                {hasSelection && (
-                  <span className="text-sm text-blue-600 font-medium">
-                    {selectedCount} selected
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -174,90 +131,46 @@ const SubmissionDashboard = ({
               )}
             </div>
           )}
-
-          {/* Bulk actions */}
-          {hasSelection && (
-            <div className="relative">
-              <Button
-                variant="outline"
-                icon={MoreVertical}
-                onClick={() => setShowBulkActions(!showBulkActions)}
-                size="small"
-              >
-                Actions ({selectedCount})
-              </Button>
-              
-              {showBulkActions && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleBulkExport('csv')}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      <Download className="w-4 h-4 inline mr-2" />
-                      Export Selected
-                    </button>
-                    <button
-                      onClick={handleBulkDelete}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4 inline mr-2" />
-                      Delete Selected
-                    </button>
-                    <div className="border-t border-gray-100 my-1"></div>
-                    <button
-                      onClick={clearSelection}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      Clear Selection
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 
-  // Render simplified stats (no status/flags)
+  // Render simplified stats
   const renderStats = () => {
     if (loading || isEmpty) return null;
 
     return (
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-gray-700">Quick Stats:</span>
-            
-            <div className="flex items-center bg-blue-50 px-3 py-1 rounded-lg">
-              <Calendar className="w-4 h-4 text-blue-600 mr-2" />
-              <span className="text-sm text-blue-700 font-medium">
-                Today: {stats.today || 0}
-              </span>
-            </div>
-            
-            <div className="flex items-center bg-green-50 px-3 py-1 rounded-lg">
-              <BarChart3 className="w-4 h-4 text-green-600 mr-2" />
-              <span className="text-sm text-green-700 font-medium">
-                This Week: {stats.thisWeek || 0}
-              </span>
-            </div>
-            
-            <div className="flex items-center bg-purple-50 px-3 py-1 rounded-lg">
-              <FileText className="w-4 h-4 text-purple-600 mr-2" />
-              <span className="text-sm text-purple-700 font-medium">
-                This Month: {stats.thisMonth || 0}
-              </span>
-            </div>
+          <span className="text-sm font-medium text-gray-700">Quick Stats:</span>
+          
+          <div className="flex items-center bg-blue-50 px-3 py-1 rounded-lg">
+            <Calendar className="w-4 h-4 text-blue-600 mr-2" />
+            <span className="text-sm text-blue-700 font-medium">
+              Today: {stats.today || 0}
+            </span>
+          </div>
+          
+          <div className="flex items-center bg-green-50 px-3 py-1 rounded-lg">
+            <BarChart3 className="w-4 h-4 text-green-600 mr-2" />
+            <span className="text-sm text-green-700 font-medium">
+              This Week: {stats.thisWeek || 0}
+            </span>
+          </div>
+          
+          <div className="flex items-center bg-purple-50 px-3 py-1 rounded-lg">
+            <FileText className="w-4 h-4 text-purple-600 mr-2" />
+            <span className="text-sm text-purple-700 font-medium">
+              This Month: {stats.thisMonth || 0}
+            </span>
           </div>
         </div>
       </div>
     );
   };
 
-  // Render main content based on view mode
+  // Render main content
   const renderContent = () => {
     // Loading state
     if (loading) {
@@ -305,22 +218,13 @@ const SubmissionDashboard = ({
         <div className="flex-1 flex items-center justify-center">
           <NoFilteredResultsState 
             onClearFilters={clearFilters}
-            filterCount={2} // Only date and search filters now
+            filterCount={2} // Only date and search filters
           />
         </div>
       );
     }
 
-    // Submission details view
-    if (viewMode === 'details' && selectedSubmissionId) {
-      return (
-        <div className="flex-1 overflow-hidden">
-          <SubmissionViewer submissionId={selectedSubmissionId} />
-        </div>
-      );
-    }
-
-    // Submissions list view
+    // Google Forms style submissions list
     return (
       <div className="flex-1 overflow-hidden">
         <SubmissionsList />
@@ -345,17 +249,14 @@ const SubmissionDashboard = ({
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content - Google Forms Style Table */}
       {renderContent()}
 
       {/* Click outside handlers */}
-      {(showExportMenu || showBulkActions) && (
+      {showExportMenu && (
         <div 
           className="fixed inset-0 z-5"
-          onClick={() => {
-            setShowExportMenu(false);
-            setShowBulkActions(false);
-          }}
+          onClick={() => setShowExportMenu(false)}
         />
       )}
     </div>
