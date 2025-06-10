@@ -1,4 +1,4 @@
-// components/Builder/FormBuilder.jsx - Enhanced with Drag & Drop
+// components/Builder/FormBuilder.jsx - Updated with Top Bar Layout
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
@@ -167,8 +167,8 @@ const FormBuilder = ({
   };
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${className}`}>
-      {/* Header */}
+    <div className={`min-h-screen bg-gray-50 flex flex-col ${className}`}>
+      {/* Main Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
@@ -245,196 +245,199 @@ const FormBuilder = ({
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex">
-        {/* Left Panel - Builder */}
-        <div className="w-1/2 p-6 space-y-6 overflow-y-auto">
+      {/* Field Selector Top Bar */}
+      <FieldSelector onAddField={handleAddField} />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Form Builder */}
+        <div className="w-1/2 flex flex-col overflow-hidden">
           {/* Form Fields List */}
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-                <Layout className="w-5 h-5 mr-2 text-blue-600" />
-                Form Fields
-                {form.fields.length > 0 && (
-                  <span className="ml-2 bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
-                    {form.fields.length}
-                  </span>
-                )}
-                {dragState.isDragging && (
-                  <Zap className="w-4 h-4 ml-2 text-blue-600 animate-bounce" />
-                )}
-              </h2>
-              
-              <div className="flex items-center gap-2">
-                {form.fields.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={handleClearAll}
-                    className="text-gray-500 hover:text-red-600"
+          <div className="flex-1 p-6 overflow-y-auto">
+            <div className="bg-white rounded-lg border border-gray-200 mb-6">
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Layout className="w-5 h-5 mr-2 text-blue-600" />
+                  Form Fields
+                  {form.fields.length > 0 && (
+                    <span className="ml-2 bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                      {form.fields.length}
+                    </span>
+                  )}
+                  {dragState.isDragging && (
+                    <Zap className="w-4 h-4 ml-2 text-blue-600 animate-bounce" />
+                  )}
+                </h2>
+                
+                <div className="flex items-center gap-2">
+                  {form.fields.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={handleClearAll}
+                      className="text-gray-500 hover:text-red-600"
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4">
+                {form.fields.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Layout className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-500 mb-2">No fields yet</h3>
+                    <p className="text-gray-400 mb-4">Use the field selector above to add fields to your form</p>
+                    <div className="flex items-center justify-center text-sm text-gray-500">
+                      <Zap className="w-4 h-4 mr-1" />
+                      <span>Tip: Fields can be reordered by dragging</span>
+                    </div>
+                  </div>
+                ) : (
+                  <DragDropContainer
+                    fields={form.fields}
+                    selectedFieldId={selectedField}
+                    onFieldSelect={handleFieldSelect}
+                    onFieldReorder={handleFieldReorder}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
                   >
-                    Clear All
-                  </Button>
+                    {form.fields.map((field) => {
+                      const fieldConfig = getFieldTypeConfig(field.type);
+                      const IconComponent = fieldConfig?.icon;
+                      const isBeingDragged = isItemBeingDragged(field.id);
+                      
+                      return (
+                        <div
+                          key={field.id}
+                          className={`
+                            p-3 border rounded-lg cursor-pointer transition-all duration-200
+                            ${selectedField === field.id 
+                              ? 'border-blue-300 bg-blue-50 shadow-sm ring-1 ring-blue-200' 
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            }
+                            ${isBeingDragged ? 'opacity-50 scale-105 rotate-1' : ''}
+                          `}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center flex-1 min-w-0">
+                              {IconComponent && (
+                                <div className={`
+                                  flex items-center justify-center w-8 h-8 rounded-lg mr-3 flex-shrink-0
+                                  ${selectedField === field.id ? 'bg-blue-100' : 'bg-gray-100'}
+                                `}>
+                                  <IconComponent className={`
+                                    w-4 h-4 
+                                    ${selectedField === field.id ? 'text-blue-600' : 'text-gray-600'}
+                                  `} />
+                                </div>
+                              )}
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-medium text-gray-900 truncate">
+                                    {field.label}
+                                  </h4>
+                                  {field.required && (
+                                    <span className="text-red-500 text-sm flex-shrink-0">*</span>
+                                  )}
+                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize flex-shrink-0">
+                                    {field.type}
+                                  </span>
+                                </div>
+                                
+                                {field.helpText && (
+                                  <p className="text-xs text-gray-500 mb-1 truncate">{field.helpText}</p>
+                                )}
+                                
+                                <div className="flex items-center gap-3 text-xs text-gray-400">
+                                  {field.type === 'select' && field.options && (
+                                    <span>{field.options.length} option{field.options.length !== 1 ? 's' : ''}</span>
+                                  )}
+                                  {field.type === 'checkbox' && field.options && (
+                                    <span>{field.options.length} choice{field.options.length !== 1 ? 's' : ''}</span>
+                                  )}
+                                  {field.type === 'radio' && field.options && (
+                                    <span>{field.options.length} option{field.options.length !== 1 ? 's' : ''}</span>
+                                  )}
+                                  {field.type === 'number' && (field.min || field.max) && (
+                                    <span>
+                                      {field.min && `min: ${field.min}`}
+                                      {field.min && field.max && ' • '}
+                                      {field.max && `max: ${field.max}`}
+                                    </span>
+                                  )}
+                                  {field.type === 'rating' && field.maxRating && (
+                                    <span>{field.maxRating} star{field.maxRating !== 1 ? 's' : ''}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 ml-3">
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                icon={Copy}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDuplicateField(field.id);
+                                }}
+                                className="text-gray-400 hover:text-blue-600"
+                                title="Duplicate field"
+                              />
+                              
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                icon={Trash2}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteField(field.id);
+                                }}
+                                className="text-gray-400 hover:text-red-600"
+                                title="Delete field"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </DragDropContainer>
                 )}
               </div>
             </div>
 
-            <div className="p-4">
-              {form.fields.length === 0 ? (
-                <div className="text-center py-8">
-                  <Layout className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-500 mb-2">No fields yet</h3>
-                  <p className="text-gray-400 mb-4">Add fields using the panel below to get started</p>
-                  <div className="flex items-center justify-center text-sm text-gray-500">
-                    <Zap className="w-4 h-4 mr-1" />
-                    <span>Tip: Fields can be reordered by dragging</span>
-                  </div>
-                </div>
-              ) : (
-                <DragDropContainer
-                  fields={form.fields}
-                  selectedFieldId={selectedField}
-                  onFieldSelect={handleFieldSelect}
-                  onFieldReorder={handleFieldReorder}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                >
-                  {form.fields.map((field) => {
-                    const fieldConfig = getFieldTypeConfig(field.type);
-                    const IconComponent = fieldConfig?.icon;
-                    const isBeingDragged = isItemBeingDragged(field.id);
-                    
-                    return (
-                      <div
-                        key={field.id}
-                        className={`
-                          p-3 border rounded-lg cursor-pointer transition-all duration-200
-                          ${selectedField === field.id 
-                            ? 'border-blue-300 bg-blue-50 shadow-sm ring-1 ring-blue-200' 
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                          }
-                          ${isBeingDragged ? 'opacity-50 scale-105 rotate-1' : ''}
-                        `}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center flex-1 min-w-0">
-                            {IconComponent && (
-                              <div className={`
-                                flex items-center justify-center w-8 h-8 rounded-lg mr-3 flex-shrink-0
-                                ${selectedField === field.id ? 'bg-blue-100' : 'bg-gray-100'}
-                              `}>
-                                <IconComponent className={`
-                                  w-4 h-4 
-                                  ${selectedField === field.id ? 'text-blue-600' : 'text-gray-600'}
-                                `} />
-                              </div>
-                            )}
-                            
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="font-medium text-gray-900 truncate">
-                                  {field.label}
-                                </h4>
-                                {field.required && (
-                                  <span className="text-red-500 text-sm flex-shrink-0">*</span>
-                                )}
-                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize flex-shrink-0">
-                                  {field.type}
-                                </span>
-                              </div>
-                              
-                              {field.helpText && (
-                                <p className="text-xs text-gray-500 mb-1 truncate">{field.helpText}</p>
-                              )}
-                              
-                              <div className="flex items-center gap-3 text-xs text-gray-400">
-                                {field.type === 'select' && field.options && (
-                                  <span>{field.options.length} option{field.options.length !== 1 ? 's' : ''}</span>
-                                )}
-                                {field.type === 'checkbox' && field.options && (
-                                  <span>{field.options.length} choice{field.options.length !== 1 ? 's' : ''}</span>
-                                )}
-                                {field.type === 'radio' && field.options && (
-                                  <span>{field.options.length} option{field.options.length !== 1 ? 's' : ''}</span>
-                                )}
-                                {field.type === 'number' && (field.min || field.max) && (
-                                  <span>
-                                    {field.min && `min: ${field.min}`}
-                                    {field.min && field.max && ' • '}
-                                    {field.max && `max: ${field.max}`}
-                                  </span>
-                                )}
-                                {field.type === 'rating' && field.maxRating && (
-                                  <span>{field.maxRating} star{field.maxRating !== 1 ? 's' : ''}</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-1 ml-3">
-                            <Button
-                              variant="ghost"
-                              size="small"
-                              icon={Copy}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDuplicateField(field.id);
-                              }}
-                              className="text-gray-400 hover:text-blue-600"
-                              title="Duplicate field"
-                            />
-                            
-                            <Button
-                              variant="ghost"
-                              size="small"
-                              icon={Trash2}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteField(field.id);
-                              }}
-                              className="text-gray-400 hover:text-red-600"
-                              title="Delete field"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </DragDropContainer>
-              )}
+            {/* Field Editor */}
+            {selectedFieldObject && (
+              <FieldEditor
+                field={selectedFieldObject}
+                onUpdateField={updateField}
+                onDeleteField={handleDeleteField}
+                onDuplicateField={handleDuplicateField}
+              />
+            )}
+
+            {/* Help Section */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+              <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+                <Zap className="w-4 h-4 mr-2" />
+                Pro Tips
+              </h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Use the top bar to quickly add fields</li>
+                <li>• Drag fields to reorder them</li>
+                <li>• Click a field to edit its properties</li>
+                <li>• Use the preview to test your form</li>
+                <li>• Required fields show a red asterisk (*)</li>
+              </ul>
             </div>
-          </div>
-
-          {/* Field Selector */}
-          <FieldSelector onAddField={handleAddField} />
-
-          {/* Field Editor */}
-          {selectedFieldObject && (
-            <FieldEditor
-              field={selectedFieldObject}
-              onUpdateField={updateField}
-              onDeleteField={handleDeleteField}
-              onDuplicateField={handleDuplicateField}
-            />
-          )}
-
-          {/* Help Section */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2 flex items-center">
-              <Zap className="w-4 h-4 mr-2" />
-              Pro Tips
-            </h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Drag fields to reorder them</li>
-              <li>• Click a field to edit its properties</li>
-              <li>• Use the preview to test your form</li>
-              <li>• Required fields show a red asterisk (*)</li>
-            </ul>
           </div>
         </div>
 
         {/* Right Panel - Preview */}
-        <div className="w-1/2 p-6">
+        <div className="w-1/2 p-6 overflow-y-auto">
           <FormPreview
             form={form}
             isVisible={isPreviewMode}
@@ -503,33 +506,34 @@ const FormBuilder = ({
               <BarChart3 className="w-4 h-4 mr-2" />
               Form Statistics
             </h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Total Fields:</span>
-                  <span className="font-medium">{formStats.totalFields}</span>
+                  <span className="text-sm text-gray-500">Total Fields:</span>
+                  <span className="text-sm font-medium">{formStats.totalFields}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Required Fields:</span>
-                  <span className="font-medium">{formStats.requiredFields}</span>
+                  <span className="text-sm text-gray-500">Required Fields:</span>
+                  <span className="text-sm font-medium">{formStats.requiredFields}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Choice Fields:</span>
-                  <span className="font-medium">{formStats.hasChoiceFields ? 'Yes' : 'No'}</span>
+                  <span className="text-sm text-gray-500">Choice Fields:</span>
+                  <span className="text-sm font-medium">{formStats.hasChoiceFields ? 'Yes' : 'No'}</span>
                 </div>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">File Fields:</span>
-                  <span className="font-medium">{formStats.hasFileFields ? 'Yes' : 'No'}</span>
+                  <span className="text-sm text-gray-500">File Fields:</span>
+                  <span className="text-sm font-medium">{formStats.hasFileFields ? 'Yes' : 'No'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Field Types:</span>
-                  <span className="font-medium">{Object.keys(formStats.fieldTypes).length}</span>
+                  <span className="text-sm text-gray-500">Field Types:</span>
+                  <span className="text-sm font-medium">{Object.keys(formStats.fieldTypes).length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Form ID:</span>
-                  <span className="font-mono text-xs">{form.id?.slice(-8) || 'Not saved'}</span>
+                  <span className="text-sm text-gray-500">Form ID:</span>
+                  <span className="text-sm font-mono text-xs">{form.id?.slice(-8) || 'Not saved'}</span>
                 </div>
               </div>
             </div>
