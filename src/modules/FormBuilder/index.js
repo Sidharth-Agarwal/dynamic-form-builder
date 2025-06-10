@@ -27,7 +27,7 @@ export { default as FieldSelector } from './components/Builder/FieldSelector';
 export { default as FieldEditor } from './components/Builder/FieldEditor';
 export { default as DragDropContainer } from './components/Builder/DragDropContainer';
 
-// ===== SUBMISSION COMPONENTS (Simplified - No Status/Flags) =====
+// ===== SUBMISSION COMPONENTS =====
 export { default as SubmissionDashboard } from './components/Submissions/SubmissionDashboard';
 export { default as SubmissionsList } from './components/Submissions/SubmissionsList';
 export { default as SubmissionViewer } from './components/Submissions/SubmissionViewer';
@@ -53,10 +53,9 @@ export { useExport } from './hooks/useExport';
 export { useFilters } from './hooks/useFilters';
 export { usePagination } from './hooks/usePagination';
 
-// ===== UTILITIES =====
+// ===== FIELD TYPES =====
 export { 
-  FIELD_TYPES, 
-  FIELD_CATEGORIES,
+  FIELD_TYPES,
   getFieldTypeConfig,
   getFieldsByCategory,
   getAllFieldTypes,
@@ -65,28 +64,33 @@ export {
   getDefaultFieldValue 
 } from './utils/fieldTypes';
 
+// ===== VALIDATION =====
 export { 
   validateField, 
   validateForm,
   getValidationSummary 
 } from './utils/validation';
 
+// ===== ESSENTIAL CONSTANTS =====
 export { 
   generateId,
   generateSubmissionId,
   FORM_BUILDER_CONSTANTS,
-  SUBMISSION_CONSTANTS, // Simplified constants
+  SUBMISSION_CONSTANTS,
   MESSAGES,
   FILE_UPLOAD,
   VALIDATION_TYPES 
 } from './utils/constants';
 
+// ===== DRAG & DROP UTILITIES =====
 export {
   reorderFields,
   moveFieldToPosition,
   duplicateField,
   getDragOverlayStyles,
-  getDropIndicatorStyles
+  getDropIndicatorStyles,
+  createDragState,
+  updateDragState
 } from './utils/dragDropUtils';
 
 // ===== DATE UTILITIES =====
@@ -100,7 +104,7 @@ export {
   formatDateForInput
 } from './utils/dateUtils';
 
-// ===== SUBMISSION UTILITIES (Simplified - No Status/Flags) =====
+// ===== SUBMISSION UTILITIES =====
 export {
   formatSubmissionData,
   formatFieldValue,
@@ -133,11 +137,12 @@ export {
   subscribeToForms,
   uploadFileToStorage,
   deleteFileFromStorage,
+  uploadMultipleFilesToStorage,
   getFormAnalytics,
   getDashboardAnalytics
 } from './services/firebase';
 
-// ===== SUBMISSION SERVICES (Simplified - No Status/Flags) =====
+// ===== SUBMISSION SERVICES =====
 export {
   saveSubmissionToFirestore,
   getSubmissionsFromFirestore,
@@ -168,15 +173,8 @@ export {
   exportService
 } from './services/export';
 
-// ===== LEGACY EXPORTS (for backward compatibility) =====
-export {
-  saveForm,
-  loadForm,
-  saveSubmission
-} from './services/firebase';
-
 // ===== VERSION INFO =====
-export const FORM_BUILDER_VERSION = '1.0.0-simplified';
+export const FORM_BUILDER_VERSION = '1.0.0-cleaned';
 
 // ===== INTEGRATION HELPERS =====
 export const validateFirebaseApp = (firebaseApp) => {
@@ -195,7 +193,7 @@ export const getRequiredFirebaseServices = () => {
   return ['firestore', 'storage', 'auth'];
 };
 
-// ===== SIMPLIFIED HELPERS =====
+// ===== SIMPLE FORM HELPERS =====
 export const createSimpleForm = (title, description = '') => {
   return {
     id: `form_${Date.now()}`,
@@ -220,74 +218,4 @@ export const createSimpleSubmission = (formId, formTitle, data) => {
     },
     notes: []
   };
-};
-
-// ===== MIGRATION HELPERS =====
-export const migrateFromLocalStorage = () => {
-  try {
-    const localForms = localStorage.getItem('formBuilder_savedForms');
-    if (localForms) {
-      return JSON.parse(localForms);
-    }
-    return [];
-  } catch (error) {
-    console.error('Error migrating from localStorage:', error);
-    return [];
-  }
-};
-
-export const clearLocalStorage = () => {
-  try {
-    localStorage.removeItem('formBuilder_savedForms');
-    localStorage.removeItem('formBuilder_preferences');
-    localStorage.removeItem('formBuilder_draft');
-    localStorage.removeItem('formBuilder_submissionFilters');
-    localStorage.removeItem('formBuilder_paginationSettings');
-    localStorage.removeItem('formBuilder_filterPresets');
-    localStorage.removeItem('formBuilder_exportHistory');
-    return true;
-  } catch (error) {
-    console.error('Error clearing localStorage:', error);
-    return false;
-  }
-};
-
-// ===== DEBUGGING HELPERS =====
-export const debugFormBuilder = () => {
-  return {
-    version: FORM_BUILDER_VERSION,
-    fieldTypes: Object.keys(FIELD_TYPES || {}),
-    categories: Object.keys(FIELD_CATEGORIES || {}),
-    constants: {
-      form: Object.keys(FORM_BUILDER_CONSTANTS || {}),
-      submission: Object.keys(SUBMISSION_CONSTANTS || {}),
-      validation: Object.keys(VALIDATION_TYPES || {})
-    }
-  };
-};
-
-// ===== SIMPLIFIED COMPONENT BUNDLES =====
-// Note: These bundles reference components that are imported above
-// They're safe because they don't create circular dependencies
-export const FormBuilderBundle = {
-  // These will be resolved at runtime after all imports are loaded
-  get Provider() { return FormBuilderProvider; },
-  get Builder() { return FormBuilder; },
-  get Renderer() { return FormRenderer; },
-  get Preview() { return FormPreview; }
-};
-
-export const SubmissionBundle = {
-  get Provider() { return SubmissionsProvider; },
-  get Dashboard() { return SubmissionDashboard; },
-  get List() { return SubmissionsList; },
-  get Viewer() { return SubmissionViewer; },
-  get Filters() { return SubmissionFilters; }
-};
-
-export const UtilityBundle = {
-  validation: { validateField, validateForm },
-  formatting: { formatDate, formatFieldValue },
-  export: { exportSubmissions, exportSubmissionsCSV },
-  dragDrop: { reorderFields, getDragOverlayStyles }
 };

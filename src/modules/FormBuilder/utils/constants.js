@@ -3,7 +3,7 @@ export const generateId = () => `field_${Date.now()}_${Math.random().toString(36
 // Generate unique ID for submissions
 export const generateSubmissionId = () => `submission_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Form Builder Constants (existing)
+// Form Builder Constants
 export const FORM_BUILDER_CONSTANTS = {
   DEFAULT_FORM_TITLE: 'Untitled Form',
   DEFAULT_FORM_DESCRIPTION: '',
@@ -16,7 +16,7 @@ export const FORM_BUILDER_CONSTANTS = {
   DEFAULT_MAX_RATING: 5
 };
 
-// 🆕 Simplified Submission Constants (Removed Status/Flags)
+// Simplified Submission Constants (Removed Status/Flags)
 export const SUBMISSION_CONSTANTS = {
   SOURCES: {
     WEB: 'web',
@@ -68,9 +68,9 @@ export const SUBMISSION_CONSTANTS = {
   }
 };
 
-// UI Messages (updated - removed status/flag messages)
+// UI Messages
 export const MESSAGES = {
-  // Existing messages
+  // Form builder messages
   FORM_SAVED: 'Form saved successfully!',
   FIELD_ADDED: 'Field added successfully!',
   FIELD_DELETED: 'Field deleted successfully!',
@@ -83,7 +83,7 @@ export const MESSAGES = {
   FILE_SIZE_ERROR: 'File size exceeds limit',
   FILE_TYPE_ERROR: 'File type not allowed',
   
-  // Simplified submission messages (removed status/flag related)
+  // Submission messages
   SUBMISSION_DELETED: 'Submission deleted successfully!',
   SUBMISSIONS_EXPORTED: 'Submissions exported successfully!',
   NOTE_ADDED: 'Note added successfully!',
@@ -95,14 +95,7 @@ export const MESSAGES = {
   FILTER_APPLIED: 'Filters applied successfully'
 };
 
-// Field Type Categories (existing)
-export const FIELD_CATEGORIES = {
-  BASIC: 'basic',
-  CHOICE: 'choice', 
-  ADVANCED: 'advanced'
-};
-
-// Validation Types (existing)
+// Validation Types
 export const VALIDATION_TYPES = {
   REQUIRED: 'required',
   MIN_LENGTH: 'minLength',
@@ -122,7 +115,7 @@ export const VALIDATION_TYPES = {
   MIN_RATING: 'minRating'
 };
 
-// File Upload Constants (existing)
+// File Upload Constants
 export const FILE_UPLOAD = {
   MAX_FILE_SIZE: 10, // MB
   MAX_FILES: 5,
@@ -137,129 +130,4 @@ export const FILE_UPLOAD = {
     TYPE_NOT_ALLOWED: 'File type not allowed',
     TOO_MANY_FILES: 'Too many files selected'
   }
-};
-
-// Date Format Constants (existing)
-export const DATE_FORMATS = {
-  US: 'MM/dd/yyyy',
-  EUROPEAN: 'dd/MM/yyyy',
-  ISO: 'yyyy-MM-dd',
-  LONG: 'MMMM dd, yyyy'
-};
-
-// Rating Constants (existing)
-export const RATING_CONSTANTS = {
-  MIN_SCALE: 1,
-  MAX_SCALE: 10,
-  DEFAULT_SCALE: 5,
-  DEFAULT_LABELS: {
-    1: 'Poor',
-    2: 'Fair',
-    3: 'Good', 
-    4: 'Very Good',
-    5: 'Excellent'
-  }
-};
-
-// Layout Options (existing)
-export const LAYOUT_OPTIONS = {
-  VERTICAL: 'vertical',
-  HORIZONTAL: 'horizontal',
-  GRID: 'grid'
-};
-
-// Drag and Drop Constants (existing)
-export const DRAG_DROP = {
-  DRAG_TYPE: 'field',
-  DROP_ANIMATION_DURATION: 200,
-  DRAG_OVERLAY_OPACITY: 0.8
-};
-
-// Form Themes (existing)
-export const FORM_THEMES = {
-  DEFAULT: {
-    name: 'Default',
-    primaryColor: '#3B82F6',
-    secondaryColor: '#E5E7EB',
-    textColor: '#1F2937',
-    backgroundColor: '#FFFFFF'
-  },
-  DARK: {
-    name: 'Dark',
-    primaryColor: '#6366F1',
-    secondaryColor: '#374151',
-    textColor: '#F9FAFB',
-    backgroundColor: '#111827'
-  },
-  MINIMAL: {
-    name: 'Minimal',
-    primaryColor: '#059669',
-    secondaryColor: '#F3F4F6',
-    textColor: '#111827',
-    backgroundColor: '#FFFFFF'
-  }
-};
-
-// Responsive Breakpoints (existing)
-export const BREAKPOINTS = {
-  MOBILE: 640,
-  TABLET: 768,
-  DESKTOP: 1024,
-  LARGE: 1280
-};
-
-// Animation Durations (existing)
-export const ANIMATIONS = {
-  FAST: 150,
-  NORMAL: 300,
-  SLOW: 500
-};
-
-// Form Builder Views (existing)
-export const VIEWS = {
-  DASHBOARD: 'dashboard',
-  BUILDER: 'builder', 
-  RENDERER: 'renderer',
-  ANALYTICS: 'analytics',
-  SUBMISSIONS: 'submissions'
-};
-
-// Storage Keys (existing)
-export const STORAGE_KEYS = {
-  SAVED_FORMS: 'formBuilder_savedForms',
-  USER_PREFERENCES: 'formBuilder_preferences',
-  DRAFT_FORM: 'formBuilder_draft',
-  SUBMISSION_FILTERS: 'formBuilder_submissionFilters',
-  PAGINATION_SETTINGS: 'formBuilder_paginationSettings'
-};
-
-// API Endpoints (existing)
-export const API_ENDPOINTS = {
-  FORMS: '/forms',
-  SUBMISSIONS: '/submissions',
-  USERS: '/users',
-  TEMPLATES: '/templates'
-};
-
-// Error Codes (simplified - removed status/flag related)
-export const ERROR_CODES = {
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  FILE_UPLOAD_ERROR: 'FILE_UPLOAD_ERROR',
-  PERMISSION_DENIED: 'PERMISSION_DENIED',
-  FORM_NOT_FOUND: 'FORM_NOT_FOUND',
-  SUBMISSION_NOT_FOUND: 'SUBMISSION_NOT_FOUND',
-  EXPORT_ERROR: 'EXPORT_ERROR',
-  BULK_ACTION_ERROR: 'BULK_ACTION_ERROR'
-};
-
-// Success Codes (simplified - removed status/flag related)
-export const SUCCESS_CODES = {
-  FORM_SAVED: 'FORM_SAVED',
-  FORM_SUBMITTED: 'FORM_SUBMITTED',
-  FIELD_ADDED: 'FIELD_ADDED',
-  FILE_UPLOADED: 'FILE_UPLOADED',
-  SUBMISSION_UPDATED: 'SUBMISSION_UPDATED',
-  SUBMISSIONS_EXPORTED: 'SUBMISSIONS_EXPORTED',
-  BULK_ACTION_SUCCESS: 'BULK_ACTION_SUCCESS'
 };

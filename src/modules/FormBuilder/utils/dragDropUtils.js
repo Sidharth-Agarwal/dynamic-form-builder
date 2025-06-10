@@ -15,14 +15,9 @@ export const reorderFields = (fields, activeId, overId) => {
   return newFields;
 };
 
-// Get the index of a field by ID
-export const getFieldIndex = (fields, fieldId) => {
-  return fields.findIndex(field => field.id === fieldId);
-};
-
 // Move field to specific position
 export const moveFieldToPosition = (fields, fieldId, newPosition) => {
-  const currentIndex = getFieldIndex(fields, fieldId);
+  const currentIndex = fields.findIndex(field => field.id === fieldId);
   
   if (currentIndex === -1 || newPosition < 0 || newPosition >= fields.length) {
     return fields;
@@ -35,21 +30,9 @@ export const moveFieldToPosition = (fields, fieldId, newPosition) => {
   return newFields;
 };
 
-// Insert field at specific position
-export const insertFieldAtPosition = (fields, field, position) => {
-  const newFields = [...fields];
-  newFields.splice(position, 0, field);
-  return newFields;
-};
-
-// Remove field and return new array
-export const removeField = (fields, fieldId) => {
-  return fields.filter(field => field.id !== fieldId);
-};
-
 // Duplicate field and insert after original
 export const duplicateField = (fields, fieldId, generateNewId) => {
-  const fieldIndex = getFieldIndex(fields, fieldId);
+  const fieldIndex = fields.findIndex(field => field.id === fieldId);
   
   if (fieldIndex === -1) {
     return fields;
@@ -62,21 +45,9 @@ export const duplicateField = (fields, fieldId, generateNewId) => {
     label: `${originalField.label} (Copy)`
   };
   
-  return insertFieldAtPosition(fields, duplicatedField, fieldIndex + 1);
-};
-
-// Validate drag and drop operation
-export const canDropField = (activeId, overId, fields) => {
-  // Basic validation - can't drop on itself
-  if (activeId === overId) {
-    return false;
-  }
-  
-  // Check if both fields exist
-  const activeExists = fields.some(field => field.id === activeId);
-  const overExists = fields.some(field => field.id === overId);
-  
-  return activeExists && overExists;
+  const newFields = [...fields];
+  newFields.splice(fieldIndex + 1, 0, duplicatedField);
+  return newFields;
 };
 
 // Create drag overlay styles
@@ -97,13 +68,6 @@ export const getDropIndicatorStyles = (isActive, position = 'between') => ({
   opacity: isActive ? 1 : 0,
   transition: 'all 200ms ease',
   width: '100%'
-});
-
-// Get drag handle styles
-export const getDragHandleStyles = (isDragging) => ({
-  cursor: isDragging ? 'grabbing' : 'grab',
-  opacity: isDragging ? 0.5 : 1,
-  transition: 'opacity 200ms ease'
 });
 
 // Accessibility helpers for drag and drop
@@ -130,61 +94,6 @@ export const getDropAnnouncement = (event) => {
   
   return `Field reordered successfully`;
 };
-
-// Touch and mobile drag configuration
-export const getDragSensors = () => ({
-  mouse: {
-    activationConstraint: {
-      distance: 8 // 8px movement required
-    }
-  },
-  touch: {
-    activationConstraint: {
-      delay: 200,  // 200ms delay for touch
-      tolerance: 5 // 5px tolerance
-    }
-  },
-  keyboard: {
-    coordinateGetter: (event, { context: { active, droppableRects } }) => {
-      if (!active || !droppableRects) return null;
-      
-      const activeRect = droppableRects.get(active.id);
-      if (!activeRect) return null;
-      
-      switch (event.code) {
-        case 'ArrowDown':
-          return { x: activeRect.left, y: activeRect.top + activeRect.height + 10 };
-        case 'ArrowUp':
-          return { x: activeRect.left, y: activeRect.top - 10 };
-        default:
-          return null;
-      }
-    }
-  }
-});
-
-// Calculate drop position
-export const calculateDropPosition = (activeIndex, overIndex) => {
-  if (activeIndex < overIndex) {
-    return overIndex - 1;
-  }
-  return overIndex;
-};
-
-// Check if field can be moved
-export const canMoveField = (fromIndex, toIndex, fieldsLength) => {
-  return (
-    fromIndex >= 0 && 
-    fromIndex < fieldsLength && 
-    toIndex >= 0 && 
-    toIndex < fieldsLength && 
-    fromIndex !== toIndex
-  );
-};
-
-// Generate drag and drop IDs
-export const generateDragId = (fieldId) => `drag-${fieldId}`;
-export const generateDropId = (fieldId) => `drop-${fieldId}`;
 
 // Drag state management helpers
 export const createDragState = () => ({
@@ -229,15 +138,3 @@ export const updateDragState = (state, action) => {
       return state;
   }
 };
-
-// Performance optimization
-export const shouldRenderDragOverlay = (activeId, fieldId) => {
-  return activeId === fieldId;
-};
-
-export const getOptimizedFieldProps = (field, dragState) => ({
-  ...field,
-  isDragged: dragState.activeId === field.id,
-  isOver: dragState.overId === field.id,
-  isDragging: dragState.isDragging
-});
