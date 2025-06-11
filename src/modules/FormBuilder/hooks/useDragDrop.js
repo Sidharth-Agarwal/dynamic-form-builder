@@ -1,4 +1,4 @@
-// hooks/useDragDrop.js - Drag & Drop Management Hook
+// hooks/useDragDrop.js - Enhanced with Toolbar Drag & Drop Support
 import { useState, useCallback, useRef } from 'react';
 import {
   DndContext,
@@ -26,6 +26,14 @@ import {
 export const useDragDrop = (items, onReorder) => {
   const [dragState, setDragState] = useState(createDragState());
   const [dragOverlay, setDragOverlay] = useState(null);
+  
+  // NEW: Toolbar drag state
+  const [toolbarDragState, setToolbarDragState] = useState({
+    isActive: false,
+    fieldType: null,
+    dragSource: null
+  });
+
   const announcements = useRef({
     onDragStart: getDragAnnouncement,
     onDragEnd: getDropAnnouncement,
@@ -43,24 +51,38 @@ export const useDragDrop = (items, onReorder) => {
     })
   );
 
-  // Handle drag start
+  // Enhanced drag start handler
   const handleDragStart = useCallback((event) => {
     const { active } = event;
-    const draggedItem = items.find(item => item.id === active.id);
+    const dragType = active.data.current?.type;
     
-    setDragState(prevState => 
-      updateDragState(prevState, {
-        type: 'DRAG_START',
-        activeId: active.id,
-        draggedField: draggedItem
-      })
-    );
+    if (dragType === 'existing_field') {
+      // Handle existing field reordering
+      const draggedItem = items.find(item => item.id === active.id);
+      
+      setDragState(prevState => 
+        updateDragState(prevState, {
+          type: 'DRAG_START',
+          activeId: active.id,
+          draggedField: draggedItem
+        })
+      );
 
-    // Set overlay for visual feedback
-    setDragOverlay(draggedItem);
+      setDragOverlay(draggedItem);
+    } else if (dragType === 'toolbar_field') {
+      // Handle toolbar field drag
+      const { fieldType, fieldConfig } = active.data.current;
+      
+      setToolbarDragState({
+        isActive: true,
+        fieldType: fieldType,
+        fieldConfig: fieldConfig,
+        dragSource: 'toolbar'
+      });
+    }
   }, [items]);
 
-  // Handle drag over
+  // Enhanced drag over handler
   const handleDragOver = useCallback((event) => {
     const { over } = event;
     
@@ -72,11 +94,13 @@ export const useDragDrop = (items, onReorder) => {
     );
   }, []);
 
-  // Handle drag end
+  // Enhanced drag end handler
   const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
+    const dragType = active.data.current?.type;
     
-    if (active && over && active.id !== over.id) {
+    if (dragType === 'existing_field' && over && active.id !== over.id) {
+      // Handle field reordering
       const oldIndex = items.findIndex(item => item.id === active.id);
       const newIndex = items.findIndex(item => item.id === over.id);
       
@@ -86,15 +110,46 @@ export const useDragDrop = (items, onReorder) => {
       }
     }
 
-    // Reset drag state
+    // Reset all drag states
     setDragState(createDragState());
     setDragOverlay(null);
+    setToolbarDragState({
+      isActive: false,
+      fieldType: null,
+      fieldConfig: null,
+      dragSource: null
+    });
   }, [items, onReorder]);
 
-  // Handle drag cancel
+  // Enhanced drag cancel handler
   const handleDragCancel = useCallback(() => {
     setDragState(createDragState());
     setDragOverlay(null);
+    setToolbarDragState({
+      isActive: false,
+      fieldType: null,
+      fieldConfig: null,
+      dragSource: null
+    });
+  }, []);
+
+  // NEW: Toolbar drag handlers
+  const handleToolbarDragStart = useCallback((fieldType, fieldConfig) => {
+    setToolbarDragState({
+      isActive: true,
+      fieldType: fieldType,
+      fieldConfig: fieldConfig,
+      dragSource: 'toolbar'
+    });
+  }, []);
+
+  const handleToolbarDragEnd = useCallback(() => {
+    setToolbarDragState({
+      isActive: false,
+      fieldType: null,
+      fieldConfig: null,
+      dragSource: null
+    });
   }, []);
 
   // Get drag overlay styles
@@ -117,6 +172,21 @@ export const useDragDrop = (items, onReorder) => {
   const isItemDropTarget = useCallback((itemId) => {
     return dragState.overId === itemId && dragState.isDragging;
   }, [dragState.overId, dragState.isDragging]);
+
+  // NEW: Check if toolbar drag is active
+  const isToolbarDragActive = useCallback(() => {
+    return toolbarDragState.isActive;
+  }, [toolbarDragState.isActive]);
+
+  // NEW: Get toolbar drag info
+  const getToolbarDragInfo = useCallback(() => {
+    return {
+      isActive: toolbarDragState.isActive,
+      fieldType: toolbarDragState.fieldType,
+      fieldConfig: toolbarDragState.fieldConfig,
+      dragSource: toolbarDragState.dragSource
+    };
+  }, [toolbarDragState]);
 
   // Get current drag position
   const getDragPosition = useCallback(() => {
@@ -191,7 +261,7 @@ export const useDragDrop = (items, onReorder) => {
     strategy: verticalListSortingStrategy
   }), [items]);
 
-  // Get DndContext props
+  // Enhanced DndContext props with toolbar support
   const getDndContextProps = useCallback(() => ({
     sensors,
     collisionDetection: closestCenter,
@@ -209,7 +279,7 @@ export const useDragDrop = (items, onReorder) => {
     'aria-relevant': 'additions removals'
   }), []);
 
-  // Create drag handle props
+  // Enhanced drag handle props with toolbar awareness
   const getDragHandleProps = useCallback((itemId) => ({
     'aria-label': `Drag to reorder`,
     'data-cy': `drag-handle-${itemId}`,
@@ -261,16 +331,24 @@ export const useDragDrop = (items, onReorder) => {
   }, [items, onReorder, shouldReorder]);
 
   return {
-    // State
+    // Existing state
     dragState,
     dragOverlay,
     isDragging: dragState.isDragging,
     
-    // Event handlers
+    // NEW: Toolbar drag state
+    toolbarDragState,
+    isToolbarDragActive: isToolbarDragActive(),
+    
+    // Existing event handlers
     handleDragStart,
     handleDragOver,
     handleDragEnd,
     handleDragCancel,
+    
+    // NEW: Toolbar event handlers
+    handleToolbarDragStart,
+    handleToolbarDragEnd,
     
     // Style helpers
     getDragOverlayStylesForItem,
@@ -280,6 +358,9 @@ export const useDragDrop = (items, onReorder) => {
     isItemBeingDragged,
     isItemDropTarget,
     getDragPosition,
+    
+    // NEW: Toolbar state checkers
+    getToolbarDragInfo,
     
     // Manual movement
     moveItem,

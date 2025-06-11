@@ -1,8 +1,8 @@
-// hooks/useFormBuilder.js - Enhanced with Drag & Drop Support
+// hooks/useFormBuilder.js - Enhanced with Toolbar Drag & Drop Support
 import { useState, useCallback } from 'react';
 import { FIELD_TYPES } from '../utils/fieldTypes';
 import { generateId, FORM_BUILDER_CONSTANTS } from '../utils/constants';
-import { reorderFields, moveFieldToPosition, duplicateField as duplicateFieldUtil } from '../utils/dragDropUtils';
+import { reorderFields, moveFieldToPosition, duplicateField as duplicateFieldUtil, insertFieldAtPosition } from '../utils/dragDropUtils';
 
 export const useFormBuilder = (initialForm = null) => {
   const [form, setForm] = useState(initialForm || {
@@ -20,12 +20,12 @@ export const useFormBuilder = (initialForm = null) => {
     isDragging: false
   });
 
-  // Add new field
+  // Add new field (existing functionality)
   const addField = useCallback((fieldType) => {
     const fieldConfig = FIELD_TYPES[fieldType];
     if (!fieldConfig) {
       console.error('Invalid field type:', fieldType);
-      return;
+      return null;
     }
 
     const newField = {
@@ -44,7 +44,90 @@ export const useFormBuilder = (initialForm = null) => {
     
     // Auto-select the newly added field for editing
     setSelectedField(newField.id);
+    return newField.id;
   }, []);
+
+  // NEW: Add field at specific position (for toolbar drag & drop)
+  const addFieldAtPosition = useCallback((fieldType, position) => {
+    const fieldConfig = FIELD_TYPES[fieldType];
+    if (!fieldConfig) {
+      console.error('Invalid field type:', fieldType);
+      return null;
+    }
+
+    const newField = {
+      id: generateId(),
+      type: fieldConfig.type,
+      ...fieldConfig.defaultProps,
+      // Add timestamp for ordering
+      createdAt: new Date().toISOString()
+    };
+
+    setForm(prev => {
+      const newFields = insertFieldAtPosition(prev.fields, newField, position);
+      return {
+        ...prev,
+        fields: newFields,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    
+    // Auto-select the newly added field for editing
+    setSelectedField(newField.id);
+    return newField.id;
+  }, []);
+
+  // NEW: Insert field between existing fields
+  const insertFieldBetween = useCallback((fieldType, afterFieldId) => {
+    const fieldConfig = FIELD_TYPES[fieldType];
+    if (!fieldConfig) {
+      console.error('Invalid field type:', fieldType);
+      return null;
+    }
+
+    const newField = {
+      id: generateId(),
+      type: fieldConfig.type,
+      ...fieldConfig.defaultProps,
+      createdAt: new Date().toISOString()
+    };
+
+    setForm(prev => {
+      const afterIndex = prev.fields.findIndex(field => field.id === afterFieldId);
+      const insertIndex = afterIndex + 1;
+      
+      const newFields = [...prev.fields];
+      newFields.splice(insertIndex, 0, newField);
+      
+      return {
+        ...prev,
+        fields: newFields,
+        updatedAt: new Date().toISOString()
+      };
+    });
+    
+    setSelectedField(newField.id);
+    return newField.id;
+  }, []);
+
+  // NEW: Smart field insertion based on drop context
+  const insertFieldSmart = useCallback((fieldType, dropContext) => {
+    const { position, targetFieldId, dropZone } = dropContext;
+    
+    if (dropZone === 'empty') {
+      // Dropping into empty form
+      return addField(fieldType);
+    } else if (position !== undefined) {
+      // Dropping at specific position
+      return addFieldAtPosition(fieldType, position);
+    } else if (targetFieldId) {
+      // Dropping near specific field
+      return insertFieldBetween(fieldType, targetFieldId);
+    } else {
+      // Fallback to end
+      return addField(fieldType);
+    }
+  }, [addField, addFieldAtPosition, insertFieldBetween]);
 
   // Update existing field
   const updateField = useCallback((fieldId, updates) => {
@@ -267,6 +350,67 @@ export const useFormBuilder = (initialForm = null) => {
     setSelectedField(null);
   }, []);
 
+  // NEW: Handle toolbar field drop with enhanced context
+  const handleToolbarFieldDrop = useCallback((fieldType, dropIndex, dropContext = {}) => {
+    if (dropIndex >= 0) {
+      return addFieldAtPosition(fieldType, dropIndex);
+    } else if (dropContext.targetFieldId) {
+      return insertFieldBetween(fieldType, dropContext.targetFieldId);
+    } else {
+      return addField(fieldType);
+    }
+  }, [addField, addFieldAtPosition, insertFieldBetween]);
+
+  // NEW: Reorder fields with enhanced validation
+  const reorderFields = useCallback((newFields) => {
+    setForm(prev => ({
+      ...prev,
+      fields: newFields,
+      updatedAt: new Date().toISOString()
+    }));
+  }, []);
+
+  // NEW: Bulk field operations
+  const bulkAddFields = useCallback((fieldTypes, startPosition = -1) => {
+    const newFields = fieldTypes.map((fieldType, index) => {
+      const fieldConfig = FIELD_TYPES[fieldType];
+      if (!fieldConfig) return null;
+
+      return {
+        id: generateId(),
+        type: fieldConfig.type,
+        ...fieldConfig.defaultProps,
+        createdAt: new Date().toISOString()
+      };
+    }).filter(Boolean);
+
+    setForm(prev => {
+      let updatedFields;
+      
+      if (startPosition >= 0 && startPosition < prev.fields.length) {
+        // Insert at specific position
+        updatedFields = [...prev.fields];
+        updatedFields.splice(startPosition, 0, ...newFields);
+      } else {
+        // Add to end
+        updatedFields = [...prev.fields, ...newFields];
+      }
+
+      return {
+        ...prev,
+        fields: updatedFields,
+        updatedAt: new Date().toISOString()
+      };
+    });
+
+    // Select the first added field
+    if (newFields.length > 0) {
+      setSelectedField(newFields[0].id);
+    }
+
+    return newFields.map(field => field.id);
+  }, []);
+
   return {
     // Form state
     form,
@@ -274,12 +418,19 @@ export const useFormBuilder = (initialForm = null) => {
     isPreviewMode,
     dragState,
     
-    // Field operations
+    // Basic field operations
     addField,
     updateField,
     deleteField,
     duplicateField,
     moveField,
+    
+    // NEW: Enhanced field operations for toolbar drag & drop
+    addFieldAtPosition,
+    insertFieldBetween,
+    insertFieldSmart,
+    handleToolbarFieldDrop,
+    bulkAddFields,
     
     // Form operations
     updateForm,
@@ -287,6 +438,7 @@ export const useFormBuilder = (initialForm = null) => {
     loadForm,
     clearAllFields,
     batchUpdateFields,
+    reorderFields,
     
     // Selection management
     setSelectedField,

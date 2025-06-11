@@ -1,32 +1,49 @@
-// components/Builder/DragDropContainer.jsx
+// components/Builder/DragDropContainer.jsx - Clean Version with Fixed Drop Zones
 import React from 'react';
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-} from '@dnd-kit/core';
-import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  useSortable,
 } from '@dnd-kit/sortable';
 import {
-  useSortable
-} from '@dnd-kit/sortable';
+  useDroppable
+} from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import DragHandle from '../Common/DragHandle';
+
+// Single drop zone component - only shows between fields during drag
+const DropZone = ({ index, isActive, position = 'between' }) => {
+  const { setNodeRef } = useDroppable({
+    id: `drop-zone-${index}`,
+    data: {
+      type: 'drop_zone',
+      index: index,
+      position: position
+    }
+  });
+
+  if (!isActive) return null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="h-8 bg-green-100 border-2 border-dashed border-green-400 rounded-lg flex items-center justify-center mx-2 my-1 transition-all duration-200"
+    >
+      <div className="flex items-center text-green-700 text-sm font-medium">
+        <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+        Drop here to add field
+      </div>
+    </div>
+  );
+};
 
 // Individual draggable field item
 const DraggableFieldItem = ({ 
   field, 
+  index,
   children, 
   isSelected = false,
   onSelect,
-  dragOverlay = false 
 }) => {
   const {
     attributes,
@@ -35,20 +52,19 @@ const DraggableFieldItem = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: field.id });
+  } = useSortable({ 
+    id: field.id,
+    data: {
+      type: 'existing_field',
+      field: field,
+      index: index
+    }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
-
-  if (dragOverlay) {
-    return (
-      <div className="bg-white border border-blue-300 rounded-lg shadow-lg p-3 opacity-90">
-        {children}
-      </div>
-    );
-  }
 
   return (
     <div
@@ -73,9 +89,6 @@ const DraggableFieldItem = ({
         />
       </div>
 
-      {/* Drop Indicator Above */}
-      <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded opacity-0 transition-opacity" />
-
       {/* Field Content */}
       <div className={`
         pl-8 transition-all duration-200
@@ -83,9 +96,6 @@ const DraggableFieldItem = ({
       `}>
         {children}
       </div>
-
-      {/* Drop Indicator Below */}
-      <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded opacity-0 transition-opacity" />
     </div>
   );
 };
@@ -96,152 +106,77 @@ const DragDropContainer = ({
   selectedFieldId = null,
   onFieldSelect,
   onFieldReorder,
-  onDragStart,
-  onDragEnd,
+  isToolbarDragging = false,
+  onToolbarDrop,
   children,
   className = ''
 }) => {
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const [activeField, setActiveField] = React.useState(null);
-
-  const handleDragStart = (event) => {
-    const { active } = event;
-    const field = fields.find(f => f.id === active.id);
-    setActiveField(field);
-    
-    if (onDragStart) {
-      onDragStart(event, field);
+  // Enhanced droppable container for empty state
+  const { setNodeRef: setEmptyDropRef } = useDroppable({
+    id: 'empty-form-drop-zone',
+    data: {
+      type: 'empty_form',
+      index: 0
     }
-  };
+  });
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    
-    if (active && over && active.id !== over.id) {
-      const oldIndex = fields.findIndex(field => field.id === active.id);
-      const newIndex = fields.findIndex(field => field.id === over.id);
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        onFieldReorder(oldIndex, newIndex);
-      }
-    }
-
-    setActiveField(null);
-    
-    if (onDragEnd) {
-      onDragEnd(event);
-    }
-  };
-
-  const handleDragCancel = () => {
-    setActiveField(null);
-  };
-
-  // If no fields provided, render children directly
+  // If no fields provided, render children directly with drop zone
   if (!fields.length) {
     return (
-      <div className={className}>
+      <div 
+        ref={setEmptyDropRef}
+        className={`
+          ${className} 
+          ${isToolbarDragging ? 'bg-green-50 border-2 border-dashed border-green-300 rounded-lg p-8 min-h-[200px] flex items-center justify-center' : ''}
+        `}
+      >
         {children}
       </div>
     );
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-      <SortableContext 
-        items={fields.map(field => field.id)} 
-        strategy={verticalListSortingStrategy}
-      >
-        <div className={`space-y-2 ${className}`}>
-          {React.Children.map(children, (child, index) => {
-            const field = fields[index];
-            
-            if (!field) return child;
-
-            return (
-              <DraggableFieldItem
-                key={field.id}
-                field={field}
-                isSelected={selectedFieldId === field.id}
-                onSelect={onFieldSelect}
-              >
-                {child}
-              </DraggableFieldItem>
-            );
-          })}
-        </div>
-      </SortableContext>
-
-      <DragOverlay>
-        {activeField ? (
-          <DraggableFieldItem field={activeField} dragOverlay>
-            <div className="p-3 bg-white border border-gray-200 rounded-lg">
-              <div className="flex items-center">
-                <div className="w-5 h-5 bg-gray-200 rounded mr-3"></div>
-                <div>
-                  <h4 className="font-medium text-gray-900">{activeField.label}</h4>
-                  <p className="text-sm text-gray-500 capitalize">{activeField.type} field</p>
-                </div>
-              </div>
-            </div>
-          </DraggableFieldItem>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
-  );
-};
-
-// Alternative simplified version for basic drag and drop
-export const SimpleDragDropContainer = ({ 
-  children, 
-  onReorder,
-  className = '' 
-}) => {
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    
-    if (active && over && active.id !== over.id && onReorder) {
-      onReorder(active.id, over.id);
-    }
-  };
-
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={handleDragEnd}
+    <SortableContext 
+      items={fields.map(field => field.id)} 
+      strategy={verticalListSortingStrategy}
     >
       <div className={className}>
-        {children}
+        {/* Drop zone at the very beginning */}
+        <DropZone 
+          index={0} 
+          isActive={isToolbarDragging} 
+          position="start"
+        />
+        
+        {React.Children.map(children, (child, index) => {
+          const field = fields[index];
+          
+          if (!field) return child;
+
+          return (
+            <React.Fragment key={field.id}>
+              <div className="mb-2"> {/* Controlled spacing */}
+                <DraggableFieldItem
+                  field={field}
+                  index={index}
+                  isSelected={selectedFieldId === field.id}
+                  onSelect={onFieldSelect}
+                >
+                  {child}
+                </DraggableFieldItem>
+              </div>
+              
+              {/* Drop zone after this field - only show during toolbar drag */}
+              <DropZone 
+                index={index + 1} 
+                isActive={isToolbarDragging} 
+                position="after"
+              />
+            </React.Fragment>
+          );
+        })}
       </div>
-    </DndContext>
+    </SortableContext>
   );
 };
 
