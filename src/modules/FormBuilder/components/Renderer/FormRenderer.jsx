@@ -227,7 +227,7 @@ const FormRenderer = ({
         </div>
 
         {/* Form Info */}
-        <div className="text-center text-sm text-gray-500 pt-4">
+        {/* <div className="text-center text-sm text-gray-500 pt-4">
           <p>Fields marked with * are required</p>
           {db && (
             <p className="mt-1 text-green-600">✅ Connected to Firebase</p>
@@ -235,7 +235,7 @@ const FormRenderer = ({
           {form.fields.length > 0 && (
             <p className="mt-1 text-blue-600">📋 Form field definitions will be saved with submission</p>
           )}
-        </div>
+        </div> */}
       </form>
     </div>
   );
