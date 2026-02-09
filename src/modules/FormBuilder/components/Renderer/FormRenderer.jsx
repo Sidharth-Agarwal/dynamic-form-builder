@@ -5,6 +5,7 @@ import Button from '../Common/Button';
 import { useValidation } from '../../hooks/useValidation';
 import { useFirebase } from '../../context/FormBuilderProvider';
 import { saveSubmissionToFirestore } from '../../services/submissions';
+import { uploadFileToStorage, uploadMultipleFilesToStorage } from '../../services/firebase';
 
 const FormRenderer = ({ 
   form, 
@@ -15,7 +16,7 @@ const FormRenderer = ({
   successMessage = 'Form submitted successfully!',
   disabled = false
 }) => {
-  const { db } = useFirebase();
+  const { db, storage } = useFirebase();
   const [formData, setFormData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -36,10 +37,8 @@ const FormRenderer = ({
     const newFormData = { ...formData, [fieldId]: value };
     setFormData(newFormData);
     
-    // Clear previous error for this field
     clearFieldError(fieldId);
     
-    // Validate the field if it has been touched
     if (isFieldTouched(fieldId)) {
       validateSingleField(fieldId, value);
     }
@@ -61,7 +60,6 @@ const FormRenderer = ({
     const validation = validateAllFields(formData);
     
     if (!validation.isValid) {
-      // Mark all fields as touched to show errors
       form.fields.forEach(field => markFieldTouched(field.id));
       return;
     }
@@ -69,18 +67,48 @@ const FormRenderer = ({
     try {
       setIsSubmitting(true);
 
-      // Check if Firebase DB is available
       if (!db) {
         throw new Error('Database connection not available. Please check your Firebase configuration.');
+      }
+
+      if (!storage) {
+        throw new Error('Storage connection not available. Please check your Firebase configuration.');
+      }
+
+      // Process file uploads
+      const processedData = { ...formData };
+      
+      for (const field of form.fields) {
+        if (field.type === 'file' && formData[field.id]) {
+          const fileValue = formData[field.id];
+          
+          if (Array.isArray(fileValue)) {
+            // Multiple files
+            const uploadedFiles = await uploadMultipleFilesToStorage(
+              storage, 
+              fileValue, 
+              `submissions/${form.id}`
+            );
+            processedData[field.id] = uploadedFiles;
+          } else {
+            // Single file
+            const uploadedFile = await uploadFileToStorage(
+              storage, 
+              fileValue, 
+              `submissions/${form.id}`
+            );
+            processedData[field.id] = uploadedFile;
+          }
+        }
       }
 
       // Enhanced submission data structure with form fields
       const submissionData = {
         formId: form.id || 'local_form',
         formTitle: form.title,
-        data: formData,
+        data: processedData,
         
-        // NEW: Include form fields for proper display later
+        // Include form fields for proper display later
         formFields: form.fields || [],
         
         metadata: {
@@ -91,9 +119,9 @@ const FormRenderer = ({
         }
       };
 
-      console.log('🚀 Submitting to Firebase with field definitions:', submissionData);
+      console.log('🚀 Submitting to Firebase with file URLs:', submissionData);
 
-      // Save to Firebase using the enhanced structure
+      // Save to Firebase
       const result = await saveSubmissionToFirestore(db, submissionData);
       
       console.log('✅ Firebase submission successful:', result);
@@ -105,7 +133,7 @@ const FormRenderer = ({
 
       setIsSubmitted(true);
       
-      // Reset form after 5 seconds (optional)
+      // Reset form after 5 seconds
       setTimeout(() => {
         setIsSubmitted(false);
         setFormData({});
@@ -159,11 +187,14 @@ const FormRenderer = ({
         )}
 
         {/* Firebase Connection Status */}
-        {!db && (
+        {(!db || !storage) && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
             <AlertCircle className="w-5 h-5 text-red-600 mr-3" />
             <p className="text-red-700">
-              Database connection not available. Form submissions will not be saved.
+              {!db && !storage && 'Database and Storage connections not available.'}
+              {!db && storage && 'Database connection not available.'}
+              {db && !storage && 'Storage connection not available.'}
+              {' Form submissions will not be saved.'}
             </p>
           </div>
         )}
@@ -218,7 +249,7 @@ const FormRenderer = ({
             variant="primary"
             size="large"
             loading={isSubmitting}
-            disabled={disabled || form.fields.length === 0 || !db}
+            disabled={disabled || form.fields.length === 0 || !db || !storage}
             icon={Send}
             className="min-w-[200px]"
           >
@@ -227,15 +258,12 @@ const FormRenderer = ({
         </div>
 
         {/* Form Info */}
-        {/* <div className="text-center text-sm text-gray-500 pt-4">
+        <div className="text-center text-sm text-gray-500 pt-4">
           <p>Fields marked with * are required</p>
-          {db && (
+          {db && storage && (
             <p className="mt-1 text-green-600">✅ Connected to Firebase</p>
           )}
-          {form.fields.length > 0 && (
-            <p className="mt-1 text-blue-600">📋 Form field definitions will be saved with submission</p>
-          )}
-        </div> */}
+        </div>
       </form>
     </div>
   );
